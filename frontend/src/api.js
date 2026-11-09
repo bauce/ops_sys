@@ -75,17 +75,13 @@ export const api = {
   finishTicket: (id, data) => req(`/api/staff/tickets/${id}/finish`, { method: 'POST', body: data }),
   closeTicket: (id, reason) => req(`/api/staff/tickets/${id}/close`, { method: 'POST', body: { reason } }),
   overview: () => req('/api/staff/tickets/stats/overview'),
+  reportSummary: (period, anchor) => req('/api/staff/reports/summary', { params: { period, anchor } }),
   board: () => req('/api/staff/tickets/board'),
   dutyWeek: (week_start) => req('/api/staff/duty', { params: { week_start } }),
   saveDutyWeek: (data) => req('/api/staff/duty/week', { method: 'PUT', body: data }),
   addDutyAdjust: (data) => req('/api/staff/duty/adjustments', { method: 'POST', body: data }),
   deleteDutyAdjust: (id) => req(`/api/staff/duty/adjustments/${id}`, { method: 'DELETE' }),
   manualTicket: (data) => req('/api/staff/tickets/manual', { method: 'POST', body: data }),
-  transferTicket: (id, to_staff_id, note) =>
-    req(`/api/staff/tickets/${id}/transfer`, { method: 'POST', body: { to_staff_id, note } }),
-  pendingTransfers: () => req('/api/staff/tickets/transfers/pending'),
-  acceptTransfer: (id) => req(`/api/staff/tickets/transfers/${id}/accept`, { method: 'POST', body: {} }),
-  rejectTransfer: (id) => req(`/api/staff/tickets/transfers/${id}/reject`, { method: 'POST', body: {} }),
 
   // ---------- 字典 / 分类 ----------
   dicts: (kind) => req(`/api/staff/dicts/${kind}`),

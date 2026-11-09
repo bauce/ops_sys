@@ -44,6 +44,15 @@
             <div class="muted" style="font-size: 12px">{{ row.name || '—' }}<span v-if="row.note"> · {{ row.note }}</span></div>
           </template>
         </el-table-column>
+        <el-table-column label="重要等级" width="96" align="center">
+          <template #default="{ row }">
+            <el-tag
+              size="small"
+              effect="light"
+              :type="row.importance === '核心' ? 'danger' : row.importance === '重要' ? 'warning' : 'info'"
+            >{{ row.importance || '普通' }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="二维码" width="110" align="center">
           <template #default="{ row }">
             <el-image
@@ -127,6 +136,13 @@
             </el-form-item>
           </el-col>
         </el-row>
+        <el-form-item label="重要等级">
+          <el-radio-group v-model="form.importance">
+            <el-radio-button label="普通" />
+            <el-radio-button label="重要" />
+            <el-radio-button label="核心" />
+          </el-radio-group>
+        </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.note" placeholder="如 投影、视频会议设备" />
         </el-form-item>
@@ -156,7 +172,7 @@ const previewVisible = ref(false)
 const current = ref(null)
 const editVisible = ref(false)
 const submitting = ref(false)
-const form = reactive({ id: null, building: '', floor: '', room_no: '', name: '', note: '' })
+const form = reactive({ id: null, building: '', floor: '', room_no: '', name: '', note: '', importance: '普通' })
 
 const isAdmin = computed(() => hasRole(auth.staff, 'admin'))
 
@@ -210,6 +226,7 @@ function openEdit(row) {
   form.room_no = row?.room_no || ''
   form.name = row?.name || ''
   form.note = row?.note || ''
+  form.importance = row?.importance || '普通'
   editVisible.value = true
 }
 
@@ -222,7 +239,7 @@ async function save() {
   try {
     const payload = {
       building: form.building, floor: form.floor, room_no: form.room_no,
-      name: form.name, note: form.note, active: 1,
+      name: form.name, note: form.note, importance: form.importance, active: 1,
     }
     if (form.id) await api.updateRoom(form.id, payload)
     else await api.createRoom(payload)

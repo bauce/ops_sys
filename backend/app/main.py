@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from .db import DATA_DIR, init_db
 from .test_mode import is_test_mode
 from .test_seed import maybe_seed_test_data
-from .routers import assets, config, duty, materials, public, rooms, staff_auth, staff_tickets
+from .routers import assets, config, duty, materials, public, reports, rooms, staff_auth, staff_tickets
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DIST_DIR = BASE_DIR.parent / "frontend" / "dist"
@@ -35,6 +35,7 @@ app.add_middleware(
 app.include_router(public.router)
 app.include_router(staff_auth.router)
 app.include_router(staff_tickets.router)
+app.include_router(reports.router)
 app.include_router(materials.router)
 app.include_router(rooms.router)
 app.include_router(assets.router)

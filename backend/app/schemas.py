@@ -48,6 +48,7 @@ class RoomIn(BaseModel):
     room_no: str
     name: str = ""
     note: str = ""
+    importance: str = "普通"
     active: int = 1
 
 

@@ -107,7 +107,8 @@ def list_rooms(
                 AND t.status IN ('pending','accepted','processing','pending_confirm')) AS open_count
            FROM rooms r WHERE """
         + " AND ".join(where)
-        + " ORDER BY r.building, r.floor, r.room_no",
+        + " ORDER BY CASE r.importance WHEN '核心' THEN 0 WHEN '重要' THEN 1 ELSE 2 END,"
+        + " r.building, r.floor, r.room_no",
         params,
     ).fetchall()
     return {"items": [dict(r) for r in rows]}
@@ -121,12 +122,13 @@ def create_room(
     admin: dict = Depends(require_roles("admin")),
 ):
     qr_code = os.urandom(5).hex()
+    importance = payload.importance if payload.importance in ("普通", "重要", "核心") else "普通"
     cur = conn.execute(
-        "INSERT INTO rooms(building,floor,room_no,name,qr_code,note,active,created_at)"
-        " VALUES(?,?,?,?,?,?,?,?)",
+        "INSERT INTO rooms(building,floor,room_no,name,qr_code,note,importance,active,created_at)"
+        " VALUES(?,?,?,?,?,?,?,?,?)",
         (
             payload.building.strip(), payload.floor.strip(), payload.room_no.strip(),
-            payload.name.strip(), qr_code, payload.note.strip(), payload.active, now(),
+            payload.name.strip(), qr_code, payload.note.strip(), importance, payload.active, now(),
         ),
     )
     conn.commit()
@@ -148,11 +150,12 @@ def update_room(
     row = conn.execute("SELECT id FROM rooms WHERE id = ?", (room_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="房间不存在")
+    importance = payload.importance if payload.importance in ("普通", "重要", "核心") else "普通"
     conn.execute(
-        "UPDATE rooms SET building=?, floor=?, room_no=?, name=?, note=?, active=? WHERE id=?",
+        "UPDATE rooms SET building=?, floor=?, room_no=?, name=?, note=?, importance=?, active=? WHERE id=?",
         (
             payload.building.strip(), payload.floor.strip(), payload.room_no.strip(),
-            payload.name.strip(), payload.note.strip(), payload.active, room_id,
+            payload.name.strip(), payload.note.strip(), importance, payload.active, room_id,
         ),
     )
     conn.commit()

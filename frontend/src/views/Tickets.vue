@@ -110,7 +110,16 @@
         <div class="info-grid">
           <div class="info-item">
             <div class="k">报障地点</div>
-            <div class="v">{{ detail.location }}</div>
+            <div class="v">
+              {{ detail.location }}
+              <el-tag
+                v-if="detail.room_importance && detail.room_importance !== '普通'"
+                size="small"
+                effect="light"
+                :type="detail.room_importance === '核心' ? 'danger' : 'warning'"
+                style="margin-left: 6px"
+              >{{ detail.room_importance }}</el-tag>
+            </div>
           </div>
           <div class="info-item">
             <div class="k">故障类型</div>
@@ -137,21 +146,6 @@
           <div class="info-item">
             <div class="k">完成时间</div>
             <div class="v">{{ fmtTime(detail.finished_at) }}</div>
-          </div>
-        </div>
-
-        <div v-if="detail.pending_transfer" class="transfer-banner">
-          <div>
-            <b>转派待接收：</b>{{ detail.pending_transfer.from_name }} →
-            {{ detail.pending_transfer.to_name }}
-            <span v-if="detail.pending_transfer.note">（{{ detail.pending_transfer.note }}）</span>
-          </div>
-          <div v-if="detail.pending_transfer.to_staff_id === auth.staff?.id" class="gap-8" style="margin-top: 8px">
-            <el-button size="small" type="primary" :loading="submitting" @click="respondTransfer(true)">接收转派</el-button>
-            <el-button size="small" :loading="submitting" @click="respondTransfer(false)">拒绝</el-button>
-          </div>
-          <div v-else class="muted" style="font-size: 12px; margin-top: 6px">
-            等待 {{ detail.pending_transfer.to_name }} 确认接收，确认前仍由 {{ detail.pending_transfer.from_name }} 处理
           </div>
         </div>
 
@@ -236,7 +230,6 @@
           <template v-else-if="['accepted', 'processing'].includes(detail.status)">
             <el-button v-if="detail.status === 'accepted'" @click="start">开始处理</el-button>
             <el-button type="primary" @click="openFinish">提交处理结果</el-button>
-            <el-button @click="openTransfer">转派他人</el-button>
             <el-button v-if="canDispatch" @click="openAssign()">改派</el-button>
             <el-button v-if="canDispatch" type="danger" plain @click="closeVisible = true">关闭工单</el-button>
           </template>
@@ -312,32 +305,6 @@
       </template>
     </el-dialog>
 
-    <!-- 转派 -->
-    <el-dialog v-model="transferVisible" title="转派工单" width="440px" align-center>
-      <p class="muted" style="font-size: 13px; margin-top: 0">
-        转派发出后，需对方在「工作台 → 待接收转派」中确认接收，工单才会变更处理人。
-      </p>
-      <el-form label-position="top">
-        <el-form-item label="转派给" required>
-          <el-select v-model="transferForm.to_staff_id" placeholder="选择接收人" style="width: 100%">
-            <el-option
-              v-for="u in transferCandidates"
-              :key="u.id"
-              :label="`${u.name}（${u.role_text}）`"
-              :value="u.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="转派说明">
-          <el-input v-model="transferForm.note" type="textarea" :rows="2" placeholder="说明转派原因，便于对方了解情况" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="transferVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="doTransfer">发出转派</el-button>
-      </template>
-    </el-dialog>
-
     <!-- 关闭工单 -->
     <el-dialog v-model="closeVisible" title="关闭工单" width="420px" align-center>
       <el-input v-model="closeReason" type="textarea" :rows="3" placeholder="请填写关闭原因，如：重复报障、报障人撤销" maxlength="200" />
@@ -384,12 +351,6 @@ const finishForm = reactive({ fault_cause: '', solve_note: '', materials: [] })
 const closeVisible = ref(false)
 const closeReason = ref('')
 const submitting = ref(false)
-
-const transferVisible = ref(false)
-const transferForm = reactive({ to_staff_id: null, note: '' })
-const transferCandidates = computed(() =>
-  engineers.value.filter((u) => u.id !== detail.value?.assignee_id && u.role !== 'admin')
-)
 
 const canDispatch = computed(() => canDispatchRole(auth.staff))
 const canHandle = computed(() => {
@@ -492,98 +453,6 @@ async function start() {
   }
 }
 
-function openTransfer() {
-  transferForm.to_staff_id = null
-  transferForm.note = ''
-  transferVisible.value = true
-}
-
-async function doTransfer() {
-  if (!transferForm.to_staff_id) {
-    ElMessage.warning('请选择接收人')
-    return
-  }
-  submitting.value = true
-  try {
-    const res = await api.transferTicket(detail.value.id, transferForm.to_staff_id, transferForm.note)
-    ElMessage.success(`已发出转派，等待 ${res.to_name} 接收`)
-    transferVisible.value = false
-    await Promise.all([refreshDetail(), loadList()])
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    submitting.value = false
-  }
-}
-
-async function respondTransfer(accept) {
-  submitting.value = true
-  try {
-    if (accept) await api.acceptTransfer(detail.value.pending_transfer.id)
-    else await api.rejectTransfer(detail.value.pending_transfer.id)
-    ElMessage.success(accept ? '已接收该工单' : '已拒绝转派')
-    await Promise.all([refreshDetail(), loadList()])
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    submitting.value = false
-  }
-}
-
-function openFinish() {
-  finishForm.fault_cause = detail.value.fault_cause || ''
-  finishForm.solve_note = ''
-  finishForm.materials = []
-  noMaterial.value = false
-  finishVisible.value = true
-}
-
-function addMaterial() {
-  finishForm.materials.push({ material_id: null, qty: 1, stock: null })
-}
-
-function onMaterialChange(m) {
-  const opt = materialOptions.value.find((o) => o.id === m.material_id)
-  m.stock = opt ? opt.stock : null
-  if (opt) m.unit = opt.unit
-}
-
-async function doFinish() {
-  if (!finishForm.solve_note.trim()) {
-    ElMessage.warning('请填写处理说明')
-    return
-  }
-  const materials = noMaterial.value
-    ? []
-    : finishForm.materials
-        .filter((m) => m.material_id)
-        .map((m) => ({ material_id: m.material_id, qty: m.qty }))
-  for (const m of noMaterial.value ? [] : finishForm.materials) {
-    if (m.material_id) {
-      const opt = materialOptions.value.find((o) => o.id === m.material_id)
-      if (opt && m.qty > opt.stock) {
-        ElMessage.warning(`物资「${opt.name}」库存不足（现有 ${opt.stock}${opt.unit}）`)
-        return
-      }
-    }
-  }
-  submitting.value = true
-  try {
-    await api.finishTicket(detail.value.id, {
-      fault_cause: finishForm.fault_cause,
-      solve_note: finishForm.solve_note,
-      materials,
-    })
-    ElMessage.success('处理结果已提交，等待报障人确认')
-    finishVisible.value = false
-    await Promise.all([refreshDetail(), loadList()])
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    submitting.value = false
-  }
-}
-
 async function doClose() {
   if (!closeReason.value.trim()) {
     ElMessage.warning('请填写关闭原因')
@@ -609,16 +478,6 @@ async function doClose() {
   font-size: 12px;
   color: var(--ink-3);
   margin: 16px 0 6px;
-}
-
-.transfer-banner {
-  margin-top: 14px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #fff8e8;
-  border: 1px solid #f5dfae;
-  color: #8a6416;
-  font-size: 13px;
 }
 
 .drawer-actions {

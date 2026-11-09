@@ -344,6 +344,7 @@ def migrate(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "staff", "roles", "TEXT DEFAULT ''")
     _ensure_column(conn, "tickets", "source", "TEXT DEFAULT 'qr'")
     _ensure_column(conn, "tickets", "photos", "TEXT DEFAULT '[]'")
+    _ensure_column(conn, "rooms", "importance", "TEXT DEFAULT '普通'")
     conn.execute("UPDATE staff SET roles = role WHERE roles IS NULL OR roles = ''")
     for key, value in (("sla_pending_minutes", "15"), ("sla_accept_minutes", "60"),
                        ("sla_processing_hours", "4")):

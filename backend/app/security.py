@@ -114,7 +114,7 @@ def current_staff(
     if not token:
         raise HTTPException(status_code=401, detail="请先登录")
     row = conn.execute(
-        "SELECT st.id, st.username, st.name, st.role, st.phone, st.email, s.expires_at"
+        "SELECT st.id, st.username, st.name, st.role, st.roles, st.phone, st.email, s.expires_at"
         " FROM sessions s JOIN staff st ON st.id = s.staff_id"
         " WHERE s.token_hash = ? AND st.active = 1",
         (sha256(token),),

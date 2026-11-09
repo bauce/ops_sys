@@ -46,7 +46,7 @@
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Box, Calendar, Cpu, Grid, Monitor, Odometer, Setting, SwitchButton, Tickets } from '@element-plus/icons-vue'
+import { Box, Calendar, Cpu, DataAnalysis, Grid, Monitor, Odometer, Setting, SwitchButton, Tickets } from '@element-plus/icons-vue'
 import { api } from '../api'
 import { auth, clearAuth, ensureAuth } from '../store'
 import { canDispatch, hasRole } from '../utils'
@@ -68,6 +68,7 @@ const menus = computed(() => {
     list.push({ path: '/board', label: '报障大屏', icon: Monitor })
   }
   if (hasRole(auth.staff, 'admin') || hasRole(auth.staff, 'dispatcher')) {
+    list.push({ path: '/admin/reports', label: '运维报表', icon: DataAnalysis })
     list.push({ path: '/admin/duty', label: '值班排班', icon: Calendar })
     list.push({ path: '/admin/settings', label: '系统设置', icon: Setting })
   }
@@ -81,6 +82,7 @@ const titles = {
   '/admin/materials': '物资管理',
   '/admin/assets': '设备台账',
   '/admin/rooms': '房间与二维码',
+  '/admin/reports': '运维报表',
   '/admin/duty': '值班排班',
   '/admin/settings': '系统设置',
 }

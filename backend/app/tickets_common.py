@@ -65,7 +65,8 @@ def staff_actor(staff: dict) -> str:
 def ticket_detail(conn: sqlite3.Connection, ticket_id: int):
     row = conn.execute(
         """SELECT t.*, r.name AS room_name, r.building, r.floor, r.room_no,
-                  d.name AS dispatcher_name, a.name AS assignee_name
+                  d.name AS dispatcher_name, a.name AS assignee_name,
+                  r.importance AS room_importance
            FROM tickets t
            LEFT JOIN rooms r ON r.id = t.room_id
            LEFT JOIN staff d ON d.id = t.dispatcher_id
@@ -84,17 +85,6 @@ def ticket_detail(conn: sqlite3.Connection, ticket_id: int):
         ).fetchone()
         if rep:
             data["reporter_name"] = rep["name"] or ""
-    tr = conn.execute(
-        """SELECT tr.id, tr.note, tr.created_at, tr.from_staff_id, tr.to_staff_id,
-                  fs.name AS from_name, ts.name AS to_name
-           FROM transfers tr
-           JOIN staff fs ON fs.id = tr.from_staff_id
-           JOIN staff ts ON ts.id = tr.to_staff_id
-           WHERE tr.ticket_id = ? AND tr.status = 'pending'
-           ORDER BY tr.id DESC LIMIT 1""",
-        (ticket_id,),
-    ).fetchone()
-    data["pending_transfer"] = dict(tr) if tr else None
     try:
         data["photos"] = json.loads(data.get("photos") or "[]")
     except (TypeError, ValueError):

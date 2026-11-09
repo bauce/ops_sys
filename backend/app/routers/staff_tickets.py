@@ -8,7 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from .. import mailer
 from ..db import get_db, now
 from .duty import today_duty
-from ..schemas import AcceptIn, FinishIn, ManualTicketIn, TransferIn
+from ..schemas import AcceptIn, FinishIn, ManualTicketIn
 from ..security import current_staff, has_role, parse_roles, require_roles
 from ..tickets_common import (
     STATUS_TEXT,
@@ -222,25 +222,6 @@ def create_manual(
         "status_text": STATUS_TEXT.get(status),
         "assignee_name": assignee["name"] if assignee else None,
     }
-
-
-@router.get("/transfers/pending")
-def my_pending_transfers(
-    conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(current_staff),
-):
-    rows = conn.execute(
-        """SELECT tr.id, tr.note, tr.created_at, t.id AS ticket_id, t.code,
-                  t.location, t.device, t.expect_time, t.status AS ticket_status,
-                  f.name AS from_name
-           FROM transfers tr
-           JOIN tickets t ON t.id = tr.ticket_id
-           JOIN staff f ON f.id = tr.from_staff_id
-           WHERE tr.to_staff_id = ? AND tr.status = 'pending'
-           ORDER BY tr.id DESC""",
-        (staff["id"],),
-    ).fetchall()
-    return {"items": [dict(r) for r in rows]}
 
 
 @router.get("/board")
@@ -537,116 +518,5 @@ def close(
         (reason, ts, ticket_id),
     )
     add_log(conn, ticket_id, staff_actor(staff), "关闭工单", reason)
-    conn.commit()
-    return {"ok": True}
-
-
-@router.post("/{ticket_id}/transfer")
-def create_transfer(
-    ticket_id: int,
-    payload: TransferIn,
-    background: BackgroundTasks,
-    conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(current_staff),
-):
-    """转派申请：工程师发起后，需接收人确认；受理员/管理员也可发起。"""
-    t = _get_ticket(conn, ticket_id)
-    if t["status"] not in ("accepted", "processing"):
-        raise HTTPException(status_code=400, detail="当前状态不能转派")
-    if not (has_role(staff, "admin") or has_role(staff, "dispatcher")):
-        if t["assignee_id"] != staff["id"]:
-            raise HTTPException(status_code=403, detail="只有当前处理人可以发起转派")
-
-    target = conn.execute(
-        "SELECT id, name, role, roles, email FROM staff WHERE id = ? AND active = 1",
-        (payload.to_staff_id,),
-    ).fetchone()
-    if not target:
-        raise HTTPException(status_code=400, detail="接收人不存在")
-    target_roles = parse_roles(target["roles"], target["role"])
-    if not ({"engineer", "dispatcher"} & set(target_roles)):
-        raise HTTPException(status_code=400, detail="只能转派给运维工程师或受理员")
-    if t["assignee_id"] == target["id"]:
-        raise HTTPException(status_code=400, detail="该工单已由此人处理")
-
-    ts = now()
-    conn.execute(
-        "UPDATE transfers SET status = 'cancelled', resolved_at = ?"
-        " WHERE ticket_id = ? AND status = 'pending'",
-        (ts, ticket_id),
-    )
-    cur = conn.execute(
-        "INSERT INTO transfers(ticket_id, from_staff_id, to_staff_id, status, note, created_at)"
-        " VALUES(?,?,?,'pending',?,?)",
-        (ticket_id, staff["id"], target["id"], payload.note.strip(), ts),
-    )
-    add_log(
-        conn, ticket_id, staff_actor(staff), "发起转派",
-        f"转给 {target['name']}" + (f"；{payload.note.strip()}" if payload.note.strip() else ""),
-    )
-    conn.commit()
-    background.add_task(mailer.send_transfer, ticket_id, target["id"], payload.note.strip())
-    return {"ok": True, "transfer_id": cur.lastrowid, "to_name": target["name"]}
-
-
-@router.post("/transfers/{transfer_id}/accept")
-def accept_transfer(
-    transfer_id: int,
-    conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(current_staff),
-):
-    tr = conn.execute(
-        "SELECT * FROM transfers WHERE id = ?", (transfer_id,)
-    ).fetchone()
-    if not tr:
-        raise HTTPException(status_code=404, detail="转派申请不存在")
-    if tr["to_staff_id"] != staff["id"]:
-        raise HTTPException(status_code=403, detail="该转派不是发给你的")
-    if tr["status"] != "pending":
-        raise HTTPException(status_code=400, detail="该转派已处理")
-    t = _get_ticket(conn, tr["ticket_id"])
-    if t["assignee_id"] != tr["from_staff_id"]:
-        conn.execute(
-            "UPDATE transfers SET status = 'cancelled', resolved_at = ? WHERE id = ?",
-            (now(), transfer_id),
-        )
-        conn.commit()
-        raise HTTPException(status_code=400, detail="工单已被改派，该申请失效")
-
-    ts = now()
-    conn.execute(
-        "UPDATE transfers SET status = 'accepted', resolved_at = ? WHERE id = ?",
-        (ts, transfer_id),
-    )
-    conn.execute(
-        "UPDATE tickets SET assignee_id = ?, updated_at = ? WHERE id = ?",
-        (staff["id"], ts, t["id"]),
-    )
-    add_log(conn, t["id"], staff_actor(staff), "接收转派")
-    conn.commit()
-    return {"ok": True}
-
-
-@router.post("/transfers/{transfer_id}/reject")
-def reject_transfer(
-    transfer_id: int,
-    conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(current_staff),
-):
-    tr = conn.execute(
-        "SELECT * FROM transfers WHERE id = ?", (transfer_id,)
-    ).fetchone()
-    if not tr:
-        raise HTTPException(status_code=404, detail="转派申请不存在")
-    if tr["to_staff_id"] != staff["id"]:
-        raise HTTPException(status_code=403, detail="该转派不是发给你的")
-    if tr["status"] != "pending":
-        raise HTTPException(status_code=400, detail="该转派已处理")
-    ts = now()
-    conn.execute(
-        "UPDATE transfers SET status = 'rejected', resolved_at = ? WHERE id = ?",
-        (ts, transfer_id),
-    )
-    add_log(conn, tr["ticket_id"], staff_actor(staff), "拒绝转派")
     conn.commit()
     return {"ok": True}

@@ -18,6 +18,7 @@ const routes = [
       { path: 'materials', component: () => import('./views/Materials.vue') },
       { path: 'assets', component: () => import('./views/Assets.vue') },
       { path: 'rooms', component: () => import('./views/Rooms.vue') },
+      { path: 'reports', component: () => import('./views/Reports.vue') },
       { path: 'duty', component: () => import('./views/Duty.vue') },
       { path: 'settings', component: () => import('./views/Settings.vue') },
     ],

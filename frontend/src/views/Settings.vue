@@ -112,7 +112,7 @@
             <el-switch v-model="mail.enabled" active-text="启用派单邮件提醒" />
           </div>
           <p class="muted" style="font-size: 13px; margin-top: -6px">
-            配置后，受理员派单、管理员改派、工程师转派时会自动给处理人发送邮件提醒。
+            配置后，受理员派单、管理员改派、改派时会自动给新处理人发送邮件提醒。
             常用邮箱服务：QQ 邮箱 smtp.qq.com:587（STARTTLS）或 465（SSL），企业邮箱请向信息中心确认参数。
           </p>
           <el-form label-position="top" style="max-width: 720px; margin-top: 12px">
@@ -228,9 +228,9 @@
         <div class="section-card">
           <div class="card-title">角色说明</div>
           <el-descriptions :column="1" border>
-            <el-descriptions-item label="系统管理员">全部权限：工单、电话代录、转派、物资、分类与字典、房间二维码、邮件配置、账号管理</el-descriptions-item>
+            <el-descriptions-item label="系统管理员">全部权限：工单、电话代录、改派、物资、分类与字典、房间二维码、邮件配置、账号管理</el-descriptions-item>
             <el-descriptions-item label="报障受理员">受理派单、电话代录、改派与大屏、物资与分类、字典维护、运维工程师账号管理</el-descriptions-item>
-            <el-descriptions-item label="运维工程师">查看指派给自己的工单、上门处理、登记领用物资、发起转派（需对方接收）</el-descriptions-item>
+            <el-descriptions-item label="运维工程师">查看指派给自己的工单、上门处理、登记领用物资；改派由受理员操作</el-descriptions-item>
             <el-descriptions-item label="普通用户（报障人）">无需账号，扫房间二维码报障，凭手机号后四位查询与签字确认</el-descriptions-item>
           </el-descriptions>
         </div>

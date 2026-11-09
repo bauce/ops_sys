@@ -25,25 +25,6 @@
       </template>
     </el-alert>
 
-    <div v-if="transfers.length" class="section-card transfer-card">
-      <div class="card-title">
-        <span>待接收转派（{{ transfers.length }}）</span>
-        <span class="muted" style="font-size: 12px">确认接收后该工单将转由你处理</span>
-      </div>
-      <div v-for="tr in transfers" :key="tr.id" class="transfer-row">
-        <div style="min-width: 0">
-          <div class="transfer-title">{{ tr.location }} · {{ tr.device }}</div>
-          <div class="muted" style="font-size: 12px">
-            {{ tr.code }} · {{ tr.from_name }} 转给你<span v-if="tr.note"> · {{ tr.note }}</span>
-          </div>
-        </div>
-        <div class="gap-8">
-          <el-button size="small" type="primary" :loading="transferBusy === tr.id" @click="acceptTransfer(tr)">接收</el-button>
-          <el-button size="small" :loading="transferBusy === tr.id" @click="rejectTransfer(tr)">拒绝</el-button>
-        </div>
-      </div>
-    </div>
-
     <div class="stat-grid">
       <div class="stat-card accent" style="cursor: pointer" @click="$router.push('/admin/tickets')">
         <div class="stat-label">待受理</div>
@@ -255,8 +236,6 @@ const stats = ref({
 })
 const pending = ref([])
 const engineers = ref([])
-const transfers = ref([])
-const transferBusy = ref(null)
 const faultTypes = ref([])
 const rooms = ref([])
 const canDispatch = computed(() => canDispatchRole(auth.staff))
@@ -296,12 +275,6 @@ async function load() {
     stats.value = ov
     pending.value = list.items
     engineers.value = users.items.filter((u) => u.active && (u.roles || [u.role]).includes('engineer'))
-    try {
-      const tr = await api.pendingTransfers()
-      transfers.value = tr.items
-    } catch (e) {
-      transfers.value = []
-    }
   } catch (e) {
     ElMessage.error(e.message)
   }
@@ -426,32 +399,6 @@ async function doManual() {
   }
 }
 
-async function acceptTransfer(tr) {
-  transferBusy.value = tr.id
-  try {
-    await api.acceptTransfer(tr.id)
-    ElMessage.success('已接收，工单转由你处理')
-    await load()
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    transferBusy.value = null
-  }
-}
-
-async function rejectTransfer(tr) {
-  transferBusy.value = tr.id
-  try {
-    await api.rejectTransfer(tr.id)
-    ElMessage.success('已拒绝该转派')
-    await load()
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    transferBusy.value = null
-  }
-}
-
 function openAccept(row) {
   accepting.value = row
   assigneeId.value = null
@@ -474,27 +421,6 @@ async function doAccept() {
 </script>
 
 <style scoped>
-.transfer-card {
-  border-color: #f0d6a8;
-  background: linear-gradient(180deg, #fffaf0, #fff);
-  margin-bottom: 14px;
-}
-.transfer-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
-  border-top: 1px dashed #f2e2c4;
-}
-.transfer-row:first-of-type {
-  border-top: none;
-}
-.transfer-title {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--ink);
-}
 .rank-row {
   display: flex;
   align-items: center;
