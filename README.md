@@ -227,6 +227,12 @@ cd "/Users/harv3y/Documents/work_space/物资管理"
 
 > 脚本按当前库存扣减领用物资；重复执行会继续追加数据。
 
+## 使用手册
+
+分角色操作手册（Word / PDF）：[信息化运维管理系统-使用手册.docx](信息化运维管理系统-使用手册.docx) · [PDF](信息化运维管理系统-使用手册.pdf)
+
+按「报障人、受理员、工程师、管理员」分章，含操作步骤表与系统截图。
+
 ## 部署到 Dokploy / Docker
 
 项目内置 `Dockerfile`、`docker-compose.yml` 与 `.dockerignore`，可直接在 Dokploy 以 Dockerfile 或 Compose 方式部署：
