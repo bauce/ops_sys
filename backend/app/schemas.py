@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 class LoginIn(BaseModel):
     username: str
-    password: str
+    password: str = ""
 
 
 class TicketCreateIn(BaseModel):

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from .. import mailer
 from ..db import get_db, now
 from ..schemas import EmailConfigIn, EmailTestIn, LoginIn, StaffIn
+from ..test_mode import is_test_mode
 from ..security import (
     COOKIE_STAFF,
     apply_duty_role,
@@ -35,10 +36,13 @@ def login(
     row = conn.execute(
         "SELECT * FROM staff WHERE username = ?", (payload.username.strip(),)
     ).fetchone()
-    if not row or not verify_password(payload.password, row["pwd_salt"], row["pwd_hash"]):
+    if not row:
         raise HTTPException(status_code=400, detail="账号或密码错误")
     if not row["active"]:
         raise HTTPException(status_code=403, detail="账号已停用")
+    # 测试环境：跳过密码校验，便于快速切换角色
+    if not is_test_mode() and not verify_password(payload.password, row["pwd_salt"], row["pwd_hash"]):
+        raise HTTPException(status_code=400, detail="账号或密码错误")
     create_session(conn, row["id"], response)
     data = dict(row)
     data["roles"] = parse_roles(data["roles"], data["role"])
@@ -53,6 +57,27 @@ def login(
         "role_text": "、".join(ROLE_NAMES.get(r, r) for r in data["roles"]),
         "email": data["email"] or "",
     }
+
+
+@router.get("/login-options")
+def login_options(conn: sqlite3.Connection = Depends(get_db)):
+    """测试环境返回可免密登录的账号列表；正式环境始终为空。"""
+    if not is_test_mode():
+        return {"test_mode": False, "accounts": []}
+    rows = conn.execute(
+        "SELECT id, username, name, role, roles FROM staff WHERE active = 1"
+        " ORDER BY CASE role WHEN 'admin' THEN 0 WHEN 'dispatcher' THEN 1 ELSE 2 END, id"
+    ).fetchall()
+    accounts = []
+    for row in rows:
+        roles = parse_roles(row["roles"], row["role"])
+        accounts.append({
+            "username": row["username"],
+            "name": row["name"],
+            "roles": roles,
+            "role_text": "、".join(ROLE_NAMES.get(r, r) for r in roles),
+        })
+    return {"test_mode": True, "accounts": accounts}
 
 
 @router.post("/logout")

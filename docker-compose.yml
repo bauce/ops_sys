@@ -11,6 +11,8 @@ services:
       TZ: Asia/Shanghai
       OPS_DB: /app/backend/data/ops.db
       OPS_PUBLIC_BASE_URL: ${OPS_PUBLIC_BASE_URL:-}
+      OPS_TEST_MODE: ${OPS_TEST_MODE:-0}
+      OPS_SEED_TEST_DATA: ${OPS_SEED_TEST_DATA:-0}
     expose:
       - "8008"
     volumes:

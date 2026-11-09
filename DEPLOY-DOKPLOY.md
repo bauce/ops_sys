@@ -62,6 +62,8 @@ Dokploy → **Projects** → 新建/进入项目 → **Create Application**，�
 | `TZ` | `Asia/Shanghai` | 容器时区，影响工单时间与值班判断 |
 | `OPS_DB` | `/app/backend/data/ops.db` | SQLite 路径（默认已是该值，可省略） |
 | `OPS_PUBLIC_BASE_URL` | `https://ops.example.com` | 对外访问地址，二维码与邮件链接使用 |
+| `OPS_TEST_MODE` | `0` | 测试环境设为 `1`：登录页免密、账号一键切换；**正式环境必须 0** |
+| `OPS_SEED_TEST_DATA` | `0` | 测试环境设为 `1`：首次启动写入 24 条测试工单、6 台测试设备；重复启动不重复写入 |
 
 ### 5. 挂载持久化卷（必须）
 
@@ -113,6 +115,18 @@ build:
 ```
 
 ---
+
+### 测试环境（仅测试分支）
+
+测试应用可在 Environment 中额外设置：
+
+```text
+OPS_TEST_MODE=1
+OPS_SEED_TEST_DATA=1
+```
+
+部署后登录页会出现「测试环境 · 免密登录」，点击任意账号直接进入；首次启动自动生成模拟工单与设备。
+**正式应用不要设置这两项**，否则任何人都可免密登录。
 
 ## 四、首次初始化
 

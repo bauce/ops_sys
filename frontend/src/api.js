@@ -54,6 +54,7 @@ export const api = {
 
   // ---------- 运维人员 ----------
   login: (username, password) => req('/api/staff/login', { method: 'POST', body: { username, password } }),
+  loginOptions: () => req('/api/staff/login-options'),
   logout: () => req('/api/staff/logout', { method: 'POST' }),
   me: () => req('/api/staff/me'),
   users: () => req('/api/staff/users'),

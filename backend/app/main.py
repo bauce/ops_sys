@@ -10,6 +10,8 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .db import DATA_DIR, init_db
+from .test_mode import is_test_mode
+from .test_seed import maybe_seed_test_data
 from .routers import assets, config, duty, materials, public, rooms, staff_auth, staff_tickets
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -44,6 +46,9 @@ app.include_router(rooms.print_router)
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
+    if is_test_mode():
+        print("[WARN] OPS_TEST_MODE=1：已启用免密登录，仅限测试环境使用！")
+    maybe_seed_test_data()
 
 
 @app.get("/api/health")
