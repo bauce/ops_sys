@@ -28,11 +28,8 @@
         </el-button>
       </el-form>
 
-      <div class="demo-tip">
-        <b>演示账号</b><br />
-        管理员：admin / admin123<br />
-        受理员：dispatcher / dispatch123<br />
-        工程师：zhangsan / eng123
+      <div style="text-align: center; margin-top: 16px; color: #909399; font-size: 12px">
+        账号由系统管理员分配，忘记密码请联系管理员重置
       </div>
 
       <div style="text-align: center; margin-top: 14px">
