@@ -36,7 +36,7 @@
         </div>
       </div>
 
-      <el-table :data="rooms" v-loading="loading" @selection-change="(rows) => (selected = rows)">
+      <el-table class="desktop-table" :data="rooms" v-loading="loading" @selection-change="(rows) => (selected = rows)">
         <el-table-column type="selection" width="46" />
         <el-table-column label="房间" min-width="200">
           <template #default="{ row }">
@@ -88,6 +88,38 @@
         </el-table-column>
         <template #empty><div class="empty-hint">暂无房间，点击右上角「新增房间」</div></template>
       </el-table>
+
+      <div class="m-card-list" v-loading="loading">
+        <div v-for="row in rooms" :key="row.id" class="m-data-card">
+          <div class="m-card-flex">
+            <div>
+              <div class="m-card-head">
+                <span class="m-card-title">{{ row.building }}{{ row.floor }}层 {{ row.room_no }}室</span>
+                <el-tag
+                  size="small"
+                  effect="light"
+                  :type="row.importance === '核心' ? 'danger' : row.importance === '重要' ? 'warning' : 'info'"
+                >{{ row.importance || '普通' }}</el-tag>
+              </div>
+              <div class="m-card-sub">{{ row.name || '—' }}<span v-if="row.note"> · {{ row.note }}</span></div>
+              <div class="m-card-row"><span class="label">报障</span><span class="value">{{ row.ticket_count }} 单<template v-if="row.open_count"> · 未结 {{ row.open_count }}</template></span></div>
+            </div>
+            <el-image
+              :src="`/api/staff/rooms/${row.id}/qr.png`"
+              class="m-card-qr"
+              fit="contain"
+              @click="preview(row)"
+            />
+          </div>
+          <div class="m-card-actions">
+            <el-button size="small" @click="preview(row)">二维码</el-button>
+            <el-button size="small" @click="printOne(row)">打印</el-button>
+            <el-button size="small" @click="copyLink(row)">复制链接</el-button>
+            <el-button v-if="isAdmin" size="small" type="primary" @click="openEdit(row)">编辑</el-button>
+          </div>
+        </div>
+        <div v-if="!rooms.length" class="empty-hint">暂无房间</div>
+      </div>
     </div>
 
     <!-- 二维码预览 -->

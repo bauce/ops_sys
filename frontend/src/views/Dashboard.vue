@@ -62,7 +62,7 @@
           <span>待受理工单</span>
           <el-button link type="primary" @click="$router.push('/admin/tickets')">全部工单 →</el-button>
         </div>
-        <el-table :data="pending" size="default" @row-click="goDetail" style="cursor: pointer">
+        <el-table class="desktop-table" :data="pending" size="default" @row-click="goDetail" style="cursor: pointer">
           <el-table-column prop="code" label="单号" width="134">
             <template #default="{ row }"><span class="mono" style="font-size: 12.5px">{{ row.code }}</span></template>
           </el-table-column>
@@ -84,6 +84,23 @@
           </el-table-column>
           <template #empty><div class="empty-hint">暂无待受理工单</div></template>
         </el-table>
+
+        <div class="m-card-list">
+          <div v-for="row in pending" :key="row.id" class="m-data-card" @click="goDetail(row)">
+            <div class="m-card-head">
+              <span class="mono" style="font-size: 11.5px; color: var(--ink-3)">{{ row.code }}</span>
+              <el-tag size="small" type="warning" effect="light">{{ row.status_text || '待受理' }}</el-tag>
+            </div>
+            <div class="m-card-title">{{ row.device }}</div>
+            <div class="m-card-sub">{{ row.location }}</div>
+            <div class="m-card-row"><span class="label">报障人</span><span class="value">{{ row.contact_name }}</span></div>
+            <div class="m-card-row"><span class="label">期望上门</span><span class="value" style="color: #2f6feb">{{ row.expect_time || '立即上门' }}</span></div>
+            <div class="m-card-actions">
+              <el-button size="small" type="primary" @click.stop="openAccept(row)">受理</el-button>
+            </div>
+          </div>
+          <div v-if="!pending.length" class="empty-hint">暂无待受理工单</div>
+        </div>
       </div>
 
       <div>

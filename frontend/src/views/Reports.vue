@@ -91,7 +91,7 @@
     <div class="two-col">
       <div class="section-card">
         <div class="card-title">工程师工作量</div>
-        <el-table :data="data.engineers" size="small">
+        <el-table class="desktop-table" :data="data.engineers" size="small">
           <el-table-column prop="name" label="工程师" min-width="90" />
           <el-table-column prop="assigned" label="接单" width="70" align="center" />
           <el-table-column prop="done" label="完成" width="70" align="center" />
@@ -99,12 +99,19 @@
             <template #default="{ row }">{{ row.avg_hours }} h</template>
           </el-table-column>
         </el-table>
+        <div class="m-card-list">
+          <div v-for="r in data.engineers" :key="r.name" class="m-data-card">
+            <div class="m-card-head"><span class="m-card-title">{{ r.name }}</span><span class="muted" style="font-size: 12px">平均 {{ r.avg_hours }} h</span></div>
+            <div class="m-card-row"><span class="label">接单</span><span class="value">{{ r.assigned }} 单</span></div>
+            <div class="m-card-row"><span class="label">完成</span><span class="value">{{ r.done }} 单</span></div>
+          </div>
+        </div>
         <div v-if="!data.engineers?.length" class="empty-hint">本期暂无处理记录</div>
       </div>
 
       <div class="section-card">
         <div class="card-title">报障房间 Top 8</div>
-        <el-table :data="data.rooms" size="small">
+        <el-table class="desktop-table" :data="data.rooms" size="small">
           <el-table-column prop="location" label="房间" min-width="160" show-overflow-tooltip />
           <el-table-column label="等级" width="80" align="center">
             <template #default="{ row }">
@@ -115,17 +122,32 @@
           </el-table-column>
           <el-table-column prop="count" label="报障" width="70" align="center" />
         </el-table>
+        <div class="m-card-list">
+          <div v-for="r in data.rooms" :key="r.location" class="m-data-card">
+            <div class="m-card-head">
+              <span class="m-card-title" style="font-size: 13.5px">{{ r.location }}</span>
+              <el-tag size="small" effect="light" :type="r.importance === '核心' ? 'danger' : r.importance === '重要' ? 'warning' : 'info'">{{ r.importance }}</el-tag>
+            </div>
+            <div class="m-card-row"><span class="label">报障</span><span class="value">{{ r.count }} 次</span></div>
+          </div>
+        </div>
         <div v-if="!data.rooms?.length" class="empty-hint">本期暂无报障</div>
       </div>
     </div>
 
     <div class="section-card">
       <div class="card-title">物资领用统计</div>
-      <el-table :data="data.materials" size="small">
+      <el-table class="desktop-table" :data="data.materials" size="small">
         <el-table-column prop="name" label="物资" min-width="160" />
         <el-table-column prop="qty" label="领用数量" width="110" align="center" />
         <el-table-column prop="tickets" label="关联工单" width="110" align="center" />
       </el-table>
+      <div class="m-card-list">
+        <div v-for="r in data.materials" :key="r.name" class="m-data-card">
+          <div class="m-card-head"><span class="m-card-title" style="font-size: 14px">{{ r.name }}</span><span class="muted" style="font-size: 12px">{{ r.qty }} 件</span></div>
+          <div class="m-card-row"><span class="label">关联工单</span><span class="value">{{ r.tickets }} 单</span></div>
+        </div>
+      </div>
       <div v-if="!data.materials?.length" class="empty-hint">本期暂无物资领用</div>
     </div>
   </div>
@@ -246,5 +268,13 @@ onMounted(load)
 .dot.done { background: #46b37a; }
 @media (max-width: 1100px) {
   .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 768px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .kpi-card { padding: 12px; }
+  .kpi-value { font-size: 22px; }
+  .bar-label { width: 76px; font-size: 12px; }
+  .trend { height: 150px; }
+  .trend-bars { height: 118px; }
 }
 </style>

@@ -22,19 +22,49 @@
       </div>
     </aside>
 
+    <el-drawer v-model="drawerOpen" direction="ltr" size="78%" :with-header="false" class="mobile-nav-drawer">
+      <div class="m-drawer-brand">
+        <div class="brand-mark">运</div>
+        <div>
+          <div style="font-weight: 700; color: #1f2937">运维管理</div>
+          <div style="font-size: 11px; color: #8a94a6">信息化运维管理系统</div>
+        </div>
+      </div>
+      <nav class="m-drawer-menu">
+        <router-link
+          v-for="item in menus"
+          :key="item.path"
+          :to="item.path"
+          class="m-nav-item"
+          :class="{ active: isActive(item.path) }"
+          @click="drawerOpen = false"
+        >
+          <el-icon :size="18"><component :is="item.icon" /></el-icon>
+          <span>{{ item.label }}</span>
+        </router-link>
+      </nav>
+      <div class="m-drawer-foot">
+        <span>{{ auth.staff?.name }} · {{ auth.staff?.role_text }}</span>
+        <el-button link type="primary" @click="logout">退出登录</el-button>
+      </div>
+    </el-drawer>
+
     <div class="staff-main">
       <header class="staff-topbar">
-        <div class="crumb">{{ pageTitle }}</div>
+        <div class="topbar-left">
+          <el-button class="mobile-menu-btn" link :icon="Menu" @click="drawerOpen = true" />
+          <div class="crumb">{{ pageTitle }}</div>
+        </div>
         <div class="topbar-right">
           <el-tag v-if="auth.staff?.on_duty && !hasRole(auth.staff, 'dispatcher') && !hasRole(auth.staff, 'admin')" size="small" effect="dark" type="warning">
             值班受理中
           </el-tag>
-          <el-tag size="small" effect="plain" type="info">{{ auth.staff?.role_text }}</el-tag>
+          <el-tag class="role-tag" size="small" effect="plain" type="info">{{ auth.staff?.role_text }}</el-tag>
           <div class="user-pill">
             <div class="avatar">{{ auth.staff?.name?.slice(0, 1) }}</div>
-            <span>{{ auth.staff?.name }}</span>
+            <span class="user-name">{{ auth.staff?.name }}</span>
           </div>
-          <el-button link :icon="SwitchButton" @click="logout">退出</el-button>
+          <el-button class="logout-btn" link :icon="SwitchButton" @click="logout"><span class="logout-text">退出</span></el-button>
         </div>
       </header>
       <router-view />
@@ -43,16 +73,17 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Box, Calendar, Cpu, DataAnalysis, Grid, Monitor, Odometer, Setting, SwitchButton, Tickets } from '@element-plus/icons-vue'
+import { Box, Calendar, Cpu, DataAnalysis, Grid, Menu, Monitor, Odometer, Setting, SwitchButton, Tickets } from '@element-plus/icons-vue'
 import { api } from '../api'
 import { auth, clearAuth, ensureAuth } from '../store'
 import { canDispatch, hasRole } from '../utils'
 
 const route = useRoute()
 const router = useRouter()
+const drawerOpen = ref(false)
 
 onMounted(() => ensureAuth())
 
@@ -104,3 +135,49 @@ async function logout() {
   router.push('/login')
 }
 </script>
+
+<style scoped>
+.mobile-nav-drawer :deep(.el-drawer__body) {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.m-drawer-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid #eef1f7;
+}
+.m-drawer-menu {
+  flex: 1;
+  padding: 10px;
+  overflow-y: auto;
+}
+.m-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: #4b5563;
+  font-size: 14px;
+  text-decoration: none;
+  margin-bottom: 4px;
+}
+.m-nav-item.active {
+  background: #eaf1ff;
+  color: #2f6feb;
+  font-weight: 600;
+}
+.m-drawer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid #eef1f7;
+  font-size: 12px;
+  color: #8a94a6;
+}
+</style>

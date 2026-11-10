@@ -30,7 +30,7 @@
         <el-tab-pane label="已取消" name="cancelled" />
       </el-tabs>
 
-      <el-table :data="items" v-loading="loading" @row-click="openTicket" style="cursor: pointer">
+      <el-table class="desktop-ticket-table" :data="items" v-loading="loading" @row-click="openTicket" style="cursor: pointer">
         <el-table-column prop="code" label="单号" width="150">
           <template #default="{ row }"><span class="mono" style="font-size: 12.5px">{{ row.code }}</span></template>
         </el-table-column>
@@ -79,6 +79,27 @@
         <template #empty><div class="empty-hint">没有符合条件的工单</div></template>
       </el-table>
 
+      <div class="mobile-ticket-list" v-loading="loading">
+        <div v-for="row in items" :key="row.id" class="m-ticket-card" @click="openTicket(row)">
+          <div class="m-ticket-top">
+            <span class="m-ticket-code">{{ row.code }}</span>
+            <el-tag :type="statusMeta(row.status).type" size="small" effect="light">{{ row.status_text }}</el-tag>
+          </div>
+          <div class="m-ticket-device">{{ row.device }}</div>
+          <div class="m-ticket-loc">{{ row.location }}</div>
+          <div class="m-ticket-tags">
+            <el-tag size="small" effect="plain" type="info">{{ row.fault_type }}</el-tag>
+            <el-tag v-if="row.expect_time === '立即上门'" size="small" effect="plain" type="warning">立即上门</el-tag>
+            <el-tag v-else size="small" effect="plain">{{ row.expect_time || '立即上门' }}</el-tag>
+          </div>
+          <div class="m-ticket-meta">
+            <span>{{ row.contact_name }} · {{ row.contact_phone }}</span>
+            <span>{{ row.assignee_name || '未指派' }} · {{ fmtTime(row.created_at) }}</span>
+          </div>
+        </div>
+        <div v-if="!items.length && !loading" class="empty-hint">没有符合条件的工单</div>
+      </div>
+
       <div style="display: flex; justify-content: flex-end; margin-top: 14px">
         <el-pagination
           v-model:current-page="page"
@@ -93,6 +114,7 @@
 
     <!-- 工单详情抽屉 -->
     <el-drawer v-model="drawerVisible" size="620px" :with-header="false" destroy-on-close>
+      <el-button class="m-detail-close" circle :icon="Close" @click="drawerVisible = false" />
       <div v-if="detail" style="padding: 4px 4px 10px">
         <div class="detail-head">
           <div>
@@ -320,7 +342,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { Close, Delete, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { api } from '../api'
 import { auth } from '../store'
 import { canDispatch as canDispatchRole, fmtTime, hasRole, statusMeta } from '../utils'
@@ -474,6 +496,21 @@ async function doClose() {
 </script>
 
 <style scoped>
+.m-detail-close {
+  display: none;
+}
+@media (max-width: 768px) {
+  .m-detail-close {
+    display: inline-flex;
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 3000;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid var(--line);
+    box-shadow: 0 2px 8px rgba(31, 45, 61, 0.12);
+  }
+}
 .sub-label {
   font-size: 12px;
   color: var(--ink-3);

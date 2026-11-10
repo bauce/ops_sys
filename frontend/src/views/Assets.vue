@@ -29,7 +29,7 @@
         <span class="muted" style="font-size: 13px">共 {{ total }} 台设备</span>
       </div>
 
-      <el-table :data="items" v-loading="loading" @row-click="openDetail" style="cursor: pointer">
+      <el-table class="desktop-table" :data="items" v-loading="loading" @row-click="openDetail" style="cursor: pointer">
         <el-table-column prop="code" label="资产编号" width="92">
           <template #default="{ row }"><span class="mono" style="font-size: 12.5px">{{ row.code }}</span></template>
         </el-table-column>
@@ -74,6 +74,26 @@
         </el-table-column>
         <template #empty><div class="empty-hint">暂无设备，点击「新增设备」或「导入」</div></template>
       </el-table>
+
+      <div class="m-card-list" v-loading="loading">
+        <div v-for="row in items" :key="row.id" class="m-data-card" @click="openDetail(row)">
+          <div class="m-card-head">
+            <span class="mono" style="font-size: 11.5px; color: var(--ink-3)">{{ row.code }}</span>
+            <el-tag size="small" :type="statusType(row.status)" effect="light">{{ row.status }}</el-tag>
+          </div>
+          <div class="m-card-title">{{ row.name }}</div>
+          <div class="m-card-sub">{{ row.brand_model || '—' }} · {{ row.category }}</div>
+          <div class="m-card-row"><span class="label">位置</span><span class="value">{{ row.location || '—' }}</span></div>
+          <div class="m-card-row"><span class="label">机柜</span><span class="value">{{ row.rack_position || '—' }}</span></div>
+          <div class="m-card-row"><span class="label">管理地址</span><span class="value mono">{{ row.mgmt_address || '—' }}</span></div>
+          <div class="m-card-row"><span class="label">管理账号</span><span class="value">{{ row.mgmt_user || '—' }}</span></div>
+          <div class="m-card-actions">
+            <el-button size="small" type="primary" @click.stop="openDetail(row)">详情</el-button>
+            <el-button v-if="canManage" size="small" @click.stop="openEdit(row)">编辑</el-button>
+          </div>
+        </div>
+        <div v-if="!items.length" class="empty-hint">暂无设备</div>
+      </div>
 
       <div style="display: flex; justify-content: flex-end; margin-top: 14px">
         <el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="total, prev, pager, next" background @current-change="load" />

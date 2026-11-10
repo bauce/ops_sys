@@ -31,7 +31,7 @@
       <div class="muted" style="font-size: 13px; margin-bottom: 10px">
         共 {{ items.length }} 种物资 · 编号按分类前缀自动生成
       </div>
-      <el-table :data="items" v-loading="loading">
+      <el-table class="desktop-table" :data="items" v-loading="loading">
         <el-table-column prop="code" label="编号" width="105">
           <template #default="{ row }"><span class="mono" style="font-size: 12.5px">{{ row.code }}</span></template>
         </el-table-column>
@@ -65,6 +65,32 @@
         </el-table-column>
         <template #empty><div class="empty-hint">暂无物资，请新增或批量导入</div></template>
       </el-table>
+
+      <div class="m-card-list" v-loading="loading">
+        <div v-for="row in items" :key="row.id" class="m-data-card">
+          <div class="m-card-head">
+            <span class="mono" style="font-size: 11.5px; color: var(--ink-3)">{{ row.code }}</span>
+            <el-tag size="small" effect="plain" type="info">{{ row.category }}</el-tag>
+          </div>
+          <div class="m-card-title">{{ row.name }}</div>
+          <div class="m-card-sub">{{ row.spec || '—' }}</div>
+          <div class="m-card-row">
+            <span class="label">库存</span>
+            <span class="value" :style="{ color: row.stock <= row.warn_stock ? '#e6a23c' : '#1f2937', fontWeight: 600 }">
+              {{ row.stock }} {{ row.unit }}
+              <span v-if="row.stock <= row.warn_stock" style="font-size: 11px"> · 低于预警</span>
+            </span>
+          </div>
+          <div class="m-card-row"><span class="label">存放位置</span><span class="value">{{ row.location || '—' }}</span></div>
+          <div class="m-card-actions">
+            <el-button size="small" @click="openStock(row, 'in')">入库</el-button>
+            <el-button size="small" @click="openStock(row, 'out')">出库</el-button>
+            <el-button size="small" @click="openLogs(row)">流水</el-button>
+            <el-button v-if="isManager" size="small" type="primary" @click="openEdit(row)">编辑</el-button>
+          </div>
+        </div>
+        <div v-if="!items.length" class="empty-hint">暂无物资，请新增或批量导入</div>
+      </div>
     </div>
 
     <!-- 新增/编辑物资 -->

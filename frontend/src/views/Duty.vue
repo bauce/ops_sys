@@ -78,7 +78,7 @@
       <p class="muted" style="font-size: 12.5px; margin-top: -6px">
         用于某一天某个时间段临时换人，例如周三 14:00-17:00 由他人替班；不影响整周固定值班安排。
       </p>
-      <el-table :data="week.adjustments" size="default">
+      <el-table class="desktop-table" :data="week.adjustments" size="default">
         <el-table-column prop="adjust_date" label="日期" width="120" />
         <el-table-column label="时间段" width="150">
           <template #default="{ row }">{{ row.start_time }} - {{ row.end_time }}</template>
@@ -98,6 +98,26 @@
         </el-table-column>
         <template #empty><div class="empty-hint">本周没有临时调班</div></template>
       </el-table>
+
+      <div class="m-card-list">
+        <div v-for="row in week.adjustments" :key="row.id" class="m-data-card">
+          <div class="m-card-head">
+            <span class="m-card-title" style="font-size: 14px">{{ row.adjust_date }}</span>
+            <span class="muted" style="font-size: 12px">{{ row.start_time }} - {{ row.end_time }}</span>
+          </div>
+          <div class="m-card-row">
+            <span class="label">替班</span>
+            <span class="value">
+              <el-tag v-for="s in row.staff" :key="s.id" size="small" style="margin-left: 4px">{{ s.name }}</el-tag>
+            </span>
+          </div>
+          <div v-if="row.note" class="m-card-row"><span class="label">备注</span><span class="value">{{ row.note }}</span></div>
+          <div class="m-card-actions">
+            <el-button size="small" type="danger" plain @click="removeAdjust(row)">删除</el-button>
+          </div>
+        </div>
+        <div v-if="!week.adjustments.length" class="empty-hint">本周没有临时调班</div>
+      </div>
     </div>
 
     <el-dialog v-model="adjustVisible" title="新增临时调班" width="460px" align-center>
