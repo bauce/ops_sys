@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, Response
 
 from ..db import get_db, now
 from ..schemas import RoomIn
-from ..security import COOKIE_STAFF, current_staff, require_roles, sha256
+from ..security import COOKIE_STAFF, current_staff, require_permissions, require_roles, sha256
 
 router = APIRouter(prefix="/api/staff/rooms", tags=["rooms"])
 print_router = APIRouter(tags=["print"])
@@ -119,7 +119,7 @@ def create_room(
     payload: RoomIn,
     request: Request,
     conn: sqlite3.Connection = Depends(get_db),
-    admin: dict = Depends(require_roles("admin")),
+    admin: dict = Depends(require_permissions("room.manage")),
 ):
     qr_code = os.urandom(5).hex()
     importance = payload.importance if payload.importance in ("普通", "重要", "核心") else "普通"
@@ -145,7 +145,7 @@ def update_room(
     room_id: int,
     payload: RoomIn,
     conn: sqlite3.Connection = Depends(get_db),
-    admin: dict = Depends(require_roles("admin")),
+    admin: dict = Depends(require_permissions("room.manage")),
 ):
     row = conn.execute("SELECT id FROM rooms WHERE id = ?", (room_id,)).fetchone()
     if not row:
@@ -166,7 +166,7 @@ def update_room(
 def delete_room(
     room_id: int,
     conn: sqlite3.Connection = Depends(get_db),
-    admin: dict = Depends(require_roles("admin")),
+    admin: dict = Depends(require_permissions("room.manage")),
 ):
     conn.execute("UPDATE rooms SET active = 0 WHERE id = ?", (room_id,))
     conn.commit()
@@ -177,7 +177,7 @@ def delete_room(
 def regen_qr(
     room_id: int,
     conn: sqlite3.Connection = Depends(get_db),
-    admin: dict = Depends(require_roles("admin")),
+    admin: dict = Depends(require_permissions("room.manage")),
 ):
     row = conn.execute("SELECT id FROM rooms WHERE id = ?", (room_id,)).fetchone()
     if not row:

@@ -193,7 +193,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Printer, Refresh, Search } from '@element-plus/icons-vue'
 import { api } from '../api'
 import { auth } from '../store'
-import { hasRole } from '../utils'
+import { can } from '../utils'
 
 const rooms = ref([])
 const loading = ref(false)
@@ -206,7 +206,7 @@ const editVisible = ref(false)
 const submitting = ref(false)
 const form = reactive({ id: null, building: '', floor: '', room_no: '', name: '', note: '', importance: '普通' })
 
-const isAdmin = computed(() => hasRole(auth.staff, 'admin'))
+const isAdmin = computed(() => can(auth.staff, 'room.manage'))
 
 onMounted(async () => {
   await load()

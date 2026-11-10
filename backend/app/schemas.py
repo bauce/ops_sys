@@ -70,6 +70,7 @@ class MaterialIn(BaseModel):
     category_id: Optional[int] = None
     spec: str = ""
     unit: str = "个"
+    measure_mode: str = "quantity"
     stock: float = 0
     warn_stock: float = 0
     location: str = ""
@@ -79,6 +80,7 @@ class MaterialIn(BaseModel):
 
 class MaterialUpdate(BaseModel):
     name: Optional[str] = None
+    measure_mode: Optional[str] = None
     category: Optional[str] = None
     category_id: Optional[int] = None
     spec: Optional[str] = None
@@ -105,6 +107,7 @@ class StaffIn(BaseModel):
     name: str
     role: str = "engineer"
     roles: List[str] = []
+    role_ids: List[int] = []
     phone: str = ""
     email: str = ""
     password: str

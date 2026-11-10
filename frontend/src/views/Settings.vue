@@ -199,6 +199,16 @@
                 >
                   {{ roleName(r) }}
                 </el-tag>
+                <el-tag
+                  v-for="r in (row.custom_roles || [])"
+                  :key="'c' + r.id"
+                  size="small"
+                  style="margin-right: 4px"
+                  type="success"
+                  effect="light"
+                >
+                  {{ r.name }}
+                </el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="phone" label="电话" width="130" />
@@ -233,6 +243,43 @@
             <el-descriptions-item label="运维工程师">查看指派给自己的工单、上门处理、登记领用物资；改派由受理员操作</el-descriptions-item>
             <el-descriptions-item label="普通用户（报障人）">无需账号，扫房间二维码报障，凭手机号后四位查询与签字确认</el-descriptions-item>
           </el-descriptions>
+        </div>
+      </el-tab-pane>
+
+      <el-tab-pane v-if="isAdmin" label="角色权限" name="roles">
+        <div class="section-card">
+          <div class="card-title">
+            <span>自定义角色</span>
+            <el-button type="primary" size="small" :icon="Plus" @click="openRole()">新增角色</el-button>
+          </div>
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 12px; border-radius: 8px"
+            title="自定义角色可自由勾选权限，并分配给账号；内置角色仍保留。例如「运维组长」= 受理派单 + 物资核审 + 资产管理员。"
+          />
+          <el-table :data="customRoles" v-loading="rolesLoading">
+            <el-table-column prop="name" label="角色名称" width="150" />
+            <el-table-column label="权限">
+              <template #default="{ row }">
+                <el-tag
+                  v-for="p in row.permission_names"
+                  :key="p"
+                  size="small"
+                  effect="plain"
+                  style="margin: 2px 4px 2px 0"
+                >{{ p }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="user_count" label="账号数" width="90" align="center" />
+            <el-table-column label="操作" width="150" align="right">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="openRole(row)">编辑</el-button>
+                <el-button link type="danger" @click="removeRole(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
       </el-tab-pane>
     </el-tabs>
@@ -274,6 +321,11 @@
             <el-checkbox label="admin">系统管理员</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
+        <el-form-item v-if="isAdmin" label="自定义角色（可多选）">
+          <el-select v-model="createForm.role_ids" multiple clearable placeholder="不分配可留空" style="width: 100%">
+            <el-option v-for="r in customRoles" :key="r.id" :label="r.name" :value="r.id" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="电话"><el-input v-model="createForm.phone" /></el-form-item>
         <el-form-item label="邮箱（用于接收派单提醒）">
           <el-input v-model="createForm.email" placeholder="name@company.com" />
@@ -307,10 +359,36 @@
         <el-form-item label="邮箱（用于接收派单提醒）">
           <el-input v-model="editUserForm.email" placeholder="name@company.com" />
         </el-form-item>
+        <el-form-item v-if="isAdmin" label="自定义角色（可多选）">
+          <el-select v-model="editUserForm.role_ids" multiple clearable placeholder="不分配可留空" style="width: 100%">
+            <el-option v-for="r in customRoles" :key="r.id" :label="r.name" :value="r.id" />
+          </el-select>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="editUserVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="saveUser">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 新增/编辑自定义角色 -->
+    <el-dialog v-model="roleVisible" :title="roleForm.id ? '编辑角色' : '新增角色'" width="620px" align-center>
+      <el-form label-position="top">
+        <el-form-item label="角色名称" required>
+          <el-input v-model="roleForm.name" placeholder="如 运维组长" maxlength="20" />
+        </el-form-item>
+        <el-form-item label="权限">
+          <div v-for="g in permissionGroups" :key="g.group" style="width: 100%; margin-bottom: 10px">
+            <div style="font-size: 12px; color: var(--ink-3); margin-bottom: 4px">{{ g.group }}</div>
+            <el-checkbox-group v-model="roleForm.permissions">
+              <el-checkbox v-for="p in g.items" :key="p.key" :label="p.key">{{ p.name }}</el-checkbox>
+            </el-checkbox-group>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="roleVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="saveRole">保存</el-button>
       </template>
     </el-dialog>
 
@@ -352,7 +430,7 @@ const loading = ref(false)
 const createVisible = ref(false)
 const resetVisible = ref(false)
 const editUserVisible = ref(false)
-const editUserForm = reactive({ id: null, name: '', phone: '', email: '', roles: [] })
+const editUserForm = reactive({ id: null, name: '', phone: '', email: '', roles: [], role_ids: [] })
 const mail = reactive({
   smtp_host: '', smtp_port: '587', smtp_secure: 'starttls', smtp_user: '',
   smtp_password: '', mail_from: '', mail_from_name: '信息化运维系统',
@@ -363,12 +441,17 @@ const testing = ref(false)
 const resetUser = ref(null)
 const resetPassword = ref('')
 const submitting = ref(false)
-const createForm = reactive({ name: '', username: '', roles: ['engineer'], phone: '', email: '', password: '' })
+const createForm = reactive({ name: '', username: '', roles: ['engineer'], role_ids: [], phone: '', email: '', password: '' })
+const customRoles = ref([])
+const permissionGroups = ref([])
+const rolesLoading = ref(false)
+const roleVisible = ref(false)
+const roleForm = reactive({ id: null, name: '', permissions: [] })
 
 onMounted(async () => {
   await Promise.all([loadDicts(), loadCategories()])
   await loadUsers()
-  if (isAdmin.value) await Promise.all([loadSettings(), loadEmail()])
+  if (isAdmin.value) await Promise.all([loadSettings(), loadEmail(), loadRoles()])
 })
 
 async function loadDicts() {
@@ -513,7 +596,7 @@ async function loadUsers() {
 
 function openCreate() {
   Object.assign(createForm, {
-    name: '', username: '', roles: ['engineer'], phone: '', email: '', password: '',
+    name: '', username: '', roles: ['engineer'], role_ids: [], phone: '', email: '', password: '',
   })
   createVisible.value = true
 }
@@ -544,6 +627,7 @@ function openEditUser(row) {
   Object.assign(editUserForm, {
     id: row.id, name: row.name, phone: row.phone || '',
     email: row.email || '', roles: [...(row.roles || [row.role])],
+    role_ids: [...(row.role_ids || [])],
   })
   editUserVisible.value = true
 }
@@ -565,7 +649,7 @@ async function saveUser() {
     }
     await api.updateUser(editUserForm.id, {
       name: editUserForm.name, phone: editUserForm.phone,
-      email: editUserForm.email, roles: editUserForm.roles,
+      email: editUserForm.email, roles: editUserForm.roles, role_ids: editUserForm.role_ids,
     })
     ElMessage.success('已保存')
     editUserVisible.value = false
@@ -574,6 +658,57 @@ async function saveUser() {
     ElMessage.error(e.message)
   } finally {
     submitting.value = false
+  }
+}
+
+async function loadRoles() {
+  rolesLoading.value = true
+  try {
+    const res = await api.customRoles()
+    customRoles.value = res.items
+    permissionGroups.value = res.permissions?.groups || []
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    rolesLoading.value = false
+  }
+}
+
+function openRole(row) {
+  roleForm.id = row?.id || null
+  roleForm.name = row?.name || ''
+  roleForm.permissions = [...(row?.permissions || [])]
+  roleVisible.value = true
+}
+
+async function saveRole() {
+  if (!roleForm.name.trim()) {
+    ElMessage.warning('请填写角色名称')
+    return
+  }
+  submitting.value = true
+  try {
+    const payload = { name: roleForm.name.trim(), permissions: roleForm.permissions }
+    if (roleForm.id) await api.updateCustomRole(roleForm.id, payload)
+    else await api.createCustomRole(payload)
+    ElMessage.success('已保存')
+    roleVisible.value = false
+    await loadRoles()
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function removeRole(row) {
+  try {
+    await ElMessageBox.confirm(`确认删除角色「${row.name}」？`, '删除角色', { type: 'warning' })
+    await api.deleteCustomRole(row.id)
+    ElMessage.success('已删除')
+    await loadRoles()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
   }
 }
 

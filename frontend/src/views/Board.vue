@@ -39,63 +39,46 @@
     </div>
 
     <section class="stat-row">
-      <div class="big-stat accent">
+      <button class="big-stat accent" :class="{ active: view === 'pending' }" @click="setView('pending')">
         <div class="label">待受理</div>
         <div class="num">{{ stats.pending || 0 }}</div>
-      </div>
-      <div class="big-stat">
+      </button>
+      <button class="big-stat" :class="{ active: view === 'today' }" @click="setView('today')">
         <div class="label">今日新增</div>
         <div class="num">{{ stats.today_new || 0 }}</div>
-      </div>
-      <div class="big-stat">
+      </button>
+      <button class="big-stat" :class="{ active: view === 'processing' }" @click="setView('processing')">
         <div class="label">处理中</div>
         <div class="num">{{ stats.processing || 0 }}</div>
-      </div>
-      <div class="big-stat">
+      </button>
+      <button class="big-stat" :class="{ active: view === 'pending_confirm' }" @click="setView('pending_confirm')">
         <div class="label">待确认</div>
         <div class="num">{{ stats.pending_confirm || 0 }}</div>
-      </div>
-      <div class="big-stat" :class="{ danger: overdue.length }">
+      </button>
+      <button class="big-stat" :class="{ danger: overdue.length, active: view === 'overdue' }" @click="setView('overdue')">
         <div class="label">超时工单</div>
         <div class="num">{{ overdue.length }}</div>
-      </div>
+      </button>
     </section>
 
     <main class="board-main">
       <div class="list-head">
-        <span>待受理工单</span>
-        <span class="hint">每 8 秒自动刷新 · {{ lastUpdated || '—' }}</span>
-      </div>
-
-      <div v-if="!pending.length && !overdue.length" class="board-empty">
-        <div class="empty-icon">✓</div>
-        <div class="empty-text">当前没有待受理工单</div>
-        <div class="empty-sub">新报障到达时会自动语音播报</div>
-      </div>
-
-      <div v-if="overdue.length" class="overdue-block">
-        <div class="block-title warn">超时预警</div>
-        <div class="ticket-grid">
-          <div v-for="t in overdue" :key="'o' + t.id" class="ticket-card overdue">
-            <div class="ticket-top">
-              <span class="ticket-loc">{{ t.location }}</span>
-              <span class="badge-overdue">{{ t.overdue_reason }}</span>
-            </div>
-            <div class="ticket-device">{{ t.device }}</div>
-            <div class="ticket-meta">
-              <span>{{ t.status_text }}</span>
-              <span class="dot">·</span>
-              <span>{{ t.assignee_name || '未指派' }}</span>
-              <span class="dot">·</span>
-              <span>已等 {{ t.wait_minutes }} 分钟</span>
-            </div>
-          </div>
+        <span>{{ viewTitle }}</span>
+        <div class="head-right">
+          <span class="hint">每 8 秒自动刷新 · {{ lastUpdated || '—' }}</span>
+          <button class="ghost-btn all-btn" :class="{ on: view === 'all' }" @click="setView('all')">全部工单</button>
         </div>
       </div>
 
-      <div v-if="pending.length" class="ticket-grid">
+      <div v-if="!viewTickets.length" class="board-empty">
+        <div class="empty-icon">✓</div>
+        <div class="empty-text">{{ emptyText }}</div>
+        <div class="empty-sub">新报障到达时会自动语音播报</div>
+      </div>
+
+      <div v-if="viewTickets.length" class="ticket-grid">
         <div
-          v-for="t in pending"
+          v-for="t in viewTickets"
           :key="t.id"
           class="ticket-card"
           :class="{ fresh: freshIds.has(t.id), overdue: t.overdue_reason }"
@@ -103,16 +86,21 @@
           <div class="ticket-top">
             <span class="ticket-loc">{{ t.location }}</span>
             <span v-if="t.overdue_reason" class="badge-overdue">{{ t.overdue_reason }}</span>
-            <span v-else class="ticket-time">{{ ago(t.wait_minutes) }}</span>
+            <span v-else class="badge-status">{{ t.status_text }}</span>
           </div>
           <div class="ticket-device">{{ t.device }}</div>
           <div class="ticket-meta">
             <span>{{ t.fault_type }}</span>
             <span class="dot">·</span>
-            <span>{{ t.contact_name }} {{ t.contact_phone }}</span>
+            <span>{{ t.assignee_name || '未指派' }}</span>
+            <span class="dot">·</span>
+            <span>{{ ago(t.wait_minutes) }}</span>
           </div>
-          <div class="ticket-expect" :class="{ urgent: t.expect_time === '立即上门' }">
+          <div v-if="t.status === 'pending'" class="ticket-expect" :class="{ urgent: t.expect_time === '立即上门' }">
             {{ t.expect_time || '立即上门' }}
+          </div>
+          <div v-else class="ticket-meta" style="margin-top: 6px">
+            <span>{{ t.contact_name }} {{ t.contact_phone }}</span>
           </div>
         </div>
       </div>
@@ -132,7 +120,7 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '../api'
 import { ensureAuth } from '../store'
@@ -147,6 +135,8 @@ const alert = ref(null)
 const voiceOn = ref(localStorage.getItem('ops_board_voice') === '1')
 const lastUpdated = ref('')
 const freshIds = ref(new Set())
+const view = ref('pending')
+const allTickets = ref([])
 
 let known = new Set()
 let initialized = false
@@ -184,6 +174,46 @@ function tickClock() {
   })
 }
 
+const viewTitle = computed(() => ({
+  pending: '待受理工单',
+  today: '今日新增工单',
+  processing: '处理中工单',
+  pending_confirm: '待确认工单',
+  overdue: '超时工单',
+  all: '全部工单',
+}[view.value] || '工单'))
+
+const emptyText = computed(() => ({
+  pending: '当前没有待受理工单',
+  today: '今天还没有新增工单',
+  processing: '当前没有处理中的工单',
+  pending_confirm: '当前没有待确认的工单',
+  overdue: '当前没有超时工单',
+  all: '还没有工单',
+}[view.value] || '暂无工单'))
+
+function localToday() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+const viewTickets = computed(() => {
+  if (view.value === 'pending') return pending.value
+  if (view.value === 'overdue') return overdue.value
+  if (view.value === 'today') {
+    const day = localToday()
+    return allTickets.value.filter((t) => (t.created_at || '').slice(0, 10) === day)
+  }
+  if (view.value === 'processing') return allTickets.value.filter((t) => ['accepted', 'processing'].includes(t.status))
+  if (view.value === 'pending_confirm') return allTickets.value.filter((t) => t.status === 'pending_confirm')
+  return allTickets.value
+})
+
+function setView(next) {
+  view.value = next
+}
+
 function ago(minutes) {
   const m = Number(minutes || 0)
   if (m < 1) return '刚刚'
@@ -204,8 +234,9 @@ async function refresh() {
         setTimeout(() => { freshIds.value = new Set() }, 30000)
       }
     }
-    pending.value = items.filter((t) => !t.overdue_reason)
+    pending.value = items
     overdue.value = data.overdue
+    allTickets.value = data.tickets || []
     duty.value = data.duty || []
     known = new Set(items.map((t) => t.id))
     initialized = true
@@ -709,5 +740,37 @@ function toggleFullscreen() {
     min-width: auto;
     width: calc(100% - 40px);
   }
+}
+
+.big-stat {
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, outline-color 0.15s;
+}
+.big-stat:hover {
+  transform: translateY(-2px);
+}
+.big-stat.active {
+  outline: 2px solid rgba(120, 170, 255, 0.9);
+  outline-offset: 2px;
+}
+.head-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.all-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+.badge-status {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #bcd0f4;
+  background: rgba(80, 130, 220, 0.18);
 }
 </style>

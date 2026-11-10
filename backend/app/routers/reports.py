@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends
 
 from ..db import get_db
-from ..security import require_roles
+from ..security import require_permissions
 
 router = APIRouter(prefix="/api/staff/reports", tags=["reports"])
 
@@ -33,7 +33,7 @@ def summary(
     period: str = "week",
     anchor: str = "",
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles("admin", "dispatcher")),
+    staff: dict = Depends(require_permissions("report.view")),
 ):
     period = "month" if period == "month" else "week"
     start, end = _range(period, anchor)
@@ -116,12 +116,13 @@ def summary(
     ]
 
     materials = [
-        {"name": r["material_name"], "qty": r["qty"], "tickets": r["tickets"]}
+        {"name": r["material_name"], "unit": r["unit"] or "", "qty": r["qty"], "tickets": r["tickets"]}
         for r in conn.execute(
-            """SELECT tm.material_name, SUM(tm.qty) qty, COUNT(DISTINCT tm.ticket_id) tickets
+            """SELECT tm.material_name, m.unit, SUM(tm.qty) qty, COUNT(DISTINCT tm.ticket_id) tickets
                FROM ticket_materials tm JOIN tickets t ON t.id = tm.ticket_id
+               JOIN materials m ON m.id = tm.material_id
                WHERE t.status='confirmed' AND substr(t.confirm_at,1,10) BETWEEN ? AND ?
-               GROUP BY tm.material_name ORDER BY qty DESC LIMIT 8""",
+               GROUP BY tm.material_name, m.unit ORDER BY qty DESC LIMIT 8""",
             (s, e),
         )
     ]

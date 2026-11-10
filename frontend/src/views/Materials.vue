@@ -42,10 +42,10 @@
           </template>
         </el-table-column>
         <el-table-column prop="category" label="分类" width="90" />
-        <el-table-column label="库存" width="110" align="center">
+        <el-table-column label="库存 / 次数" width="110" align="center">
           <template #default="{ row }">
             <span :style="{ color: row.stock <= row.warn_stock ? '#e6a23c' : '#1f2937', fontWeight: 600 }">
-              {{ row.stock }} {{ row.unit }}
+              {{ row.stock }} {{ row.measure_mode === 'usage' ? '次' : row.unit }}
             </span>
             <div v-if="row.stock <= row.warn_stock" style="font-size: 11.5px; color: #e6a23c">低于预警</div>
           </template>
@@ -57,8 +57,10 @@
         </el-table-column>
         <el-table-column label="操作" width="230" align="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openStock(row, 'in')">入库</el-button>
-            <el-button link type="primary" @click="openStock(row, 'out')">出库</el-button>
+            <template v-if="isManager">
+              <el-button link type="primary" @click="openStock(row, 'in')">入库</el-button>
+              <el-button link type="primary" @click="openStock(row, 'out')">出库</el-button>
+            </template>
             <el-button link @click="openLogs(row)">流水</el-button>
             <el-button v-if="isManager" link type="primary" @click="openEdit(row)">编辑</el-button>
           </template>
@@ -75,7 +77,7 @@
           <div class="m-card-title">{{ row.name }}</div>
           <div class="m-card-sub">{{ row.spec || '—' }}</div>
           <div class="m-card-row">
-            <span class="label">库存</span>
+            <span class="label">{{ row.measure_mode === 'usage' ? '剩余次数' : '库存' }}</span>
             <span class="value" :style="{ color: row.stock <= row.warn_stock ? '#e6a23c' : '#1f2937', fontWeight: 600 }">
               {{ row.stock }} {{ row.unit }}
               <span v-if="row.stock <= row.warn_stock" style="font-size: 11px"> · 低于预警</span>
@@ -83,8 +85,8 @@
           </div>
           <div class="m-card-row"><span class="label">存放位置</span><span class="value">{{ row.location || '—' }}</span></div>
           <div class="m-card-actions">
-            <el-button size="small" @click="openStock(row, 'in')">入库</el-button>
-            <el-button size="small" @click="openStock(row, 'out')">出库</el-button>
+            <el-button v-if="isManager" size="small" @click="openStock(row, 'in')">入库</el-button>
+            <el-button v-if="isManager" size="small" @click="openStock(row, 'out')">出库</el-button>
             <el-button size="small" @click="openLogs(row)">流水</el-button>
             <el-button v-if="isManager" size="small" type="primary" @click="openEdit(row)">编辑</el-button>
           </div>
@@ -121,10 +123,19 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="单位">
-              <el-input v-model="form.unit" placeholder="个" />
+              <el-input v-model="form.unit" :disabled="form.measure_mode === 'usage'" placeholder="个" />
             </el-form-item>
           </el-col>
         </el-row>
+        <el-form-item label="计量方式">
+          <el-radio-group v-model="form.measure_mode" @change="onMeasureChange">
+            <el-radio-button label="quantity">按数量</el-radio-button>
+            <el-radio-button label="usage">按使用次数</el-radio-button>
+          </el-radio-group>
+          <div class="muted" style="font-size: 12px; margin-top: 4px">
+            不易计量的物资（如散热硅脂）选择「按使用次数」，出库时填写使用次数，系统按次扣减。
+          </div>
+        </el-form-item>
         <el-row :gutter="12">
           <el-col :span="8">
             <el-form-item :label="form.id ? '当前库存' : '初始库存'">
@@ -155,11 +166,24 @@
     <!-- 入库/出库 -->
     <el-dialog v-model="stockVisible" :title="stockKind === 'in' ? '物资入库' : '物资出库'" width="420px" align-center>
       <div v-if="current" class="muted" style="font-size: 13px; margin-bottom: 14px">
-        {{ current.name }} · {{ current.spec }} · 当前库存 {{ current.stock }} {{ current.unit }}
+        {{ current.name }} · {{ current.spec }} ·
+        {{ current.measure_mode === 'usage' ? '剩余' : '当前库存' }}
+        {{ current.stock }} {{ current.measure_mode === 'usage' ? '次' : current.unit }}
       </div>
       <el-form label-position="top">
-        <el-form-item :label="stockKind === 'in' ? '入库数量' : '出库数量'" required>
-          <el-input-number v-model="stockForm.qty" :min="0.1" :precision="1" style="width: 100%" />
+        <el-form-item
+          :label="current?.measure_mode === 'usage'
+            ? (stockKind === 'in' ? '增加使用次数' : '本次使用次数')
+            : (stockKind === 'in' ? '入库数量' : '出库数量')"
+          required
+        >
+          <el-input-number
+            v-model="stockForm.qty"
+            :min="current?.measure_mode === 'usage' ? 1 : 0.1"
+            :precision="current?.measure_mode === 'usage' ? 0 : 1"
+            :step="current?.measure_mode === 'usage' ? 1 : 0.1"
+            style="width: 100%"
+          />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="stockForm.note" :placeholder="stockKind === 'in' ? '如 采购入库、供应商送货' : '如 日常领用'" />
@@ -276,7 +300,7 @@ import { ElMessage } from 'element-plus'
 import { Download, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
 import { api } from '../api'
 import { auth } from '../store'
-import { fmtTime, hasRole, money } from '../utils'
+import { can, fmtTime, money } from '../utils'
 
 const items = ref([])
 const categories = ref([])
@@ -284,14 +308,14 @@ const categoryList = ref([])
 const loading = ref(false)
 const keyword = ref('')
 const category = ref('')
-const isManager = computed(() => hasRole(auth.staff, 'admin') || hasRole(auth.staff, 'dispatcher'))
+const isManager = computed(() => can(auth.staff, 'material.manage') || can(auth.staff, 'material.approve'))
 const lowCount = computed(() => items.value.filter((i) => i.stock <= i.warn_stock).length)
 
 const editVisible = ref(false)
 const submitting = ref(false)
 const form = reactive({
   id: null, code: '', name: '', category_id: null, spec: '', unit: '个',
-  stock: 0, warn_stock: 0, location: '', unit_price: 0,
+  measure_mode: 'quantity', stock: 0, warn_stock: 0, location: '', unit_price: 0,
 })
 
 const stockVisible = ref(false)
@@ -354,17 +378,24 @@ async function loadCategories() {
   }
 }
 
+function onMeasureChange(value) {
+  if (value === 'usage') form.unit = '次'
+  else if (form.unit === '次') form.unit = '个'
+}
+
 function openEdit(row) {
   if (row) {
     Object.assign(form, {
       id: row.id, code: row.code, name: row.name, category_id: row.category_id,
-      spec: row.spec, unit: row.unit, stock: row.stock, warn_stock: row.warn_stock,
+      spec: row.spec, unit: row.unit, measure_mode: row.measure_mode || 'quantity',
+      stock: row.stock, warn_stock: row.warn_stock,
       location: row.location, unit_price: row.unit_price,
     })
   } else {
     Object.assign(form, {
       id: null, code: '', name: '', category_id: categoryList.value[0]?.id || null,
-      spec: '', unit: '个', stock: 0, warn_stock: 0, location: '', unit_price: 0,
+      spec: '', unit: '个', measure_mode: 'quantity', stock: 0, warn_stock: 0,
+      location: '', unit_price: 0,
     })
   }
   editVisible.value = true
@@ -380,11 +411,13 @@ async function saveMaterial() {
     if (form.id) {
       await api.updateMaterial(form.id, {
         name: form.name, category_id: form.category_id, spec: form.spec, unit: form.unit,
+        measure_mode: form.measure_mode,
         warn_stock: form.warn_stock, location: form.location, unit_price: form.unit_price,
       })
     } else {
       const res = await api.createMaterial({
         name: form.name, category_id: form.category_id, spec: form.spec, unit: form.unit,
+        measure_mode: form.measure_mode,
         stock: form.stock, warn_stock: form.warn_stock, location: form.location,
         unit_price: form.unit_price,
       })

@@ -79,7 +79,7 @@ import { ElMessage } from 'element-plus'
 import { Box, Calendar, Cpu, DataAnalysis, Grid, Menu, Monitor, Odometer, Setting, SwitchButton, Tickets } from '@element-plus/icons-vue'
 import { api } from '../api'
 import { auth, clearAuth, ensureAuth } from '../store'
-import { canDispatch, hasRole } from '../utils'
+import { can, canDispatch, hasRole } from '../utils'
 
 const route = useRoute()
 const router = useRouter()
@@ -88,19 +88,15 @@ const drawerOpen = ref(false)
 onMounted(() => ensureAuth())
 
 const menus = computed(() => {
-  const list = [
-    { path: '/admin', label: '工作台', icon: Odometer },
-    { path: '/admin/tickets', label: '工单管理', icon: Tickets },
-    { path: '/admin/materials', label: '物资管理', icon: Box },
-    { path: '/admin/assets', label: '设备台账', icon: Cpu },
-    { path: '/admin/rooms', label: '房间与二维码', icon: Grid },
-  ]
-  if (canDispatch(auth.staff)) {
-    list.push({ path: '/board', label: '报障大屏', icon: Monitor })
-  }
-  if (hasRole(auth.staff, 'admin') || hasRole(auth.staff, 'dispatcher')) {
-    list.push({ path: '/admin/reports', label: '运维报表', icon: DataAnalysis })
-    list.push({ path: '/admin/duty', label: '值班排班', icon: Calendar })
+  const list = [{ path: '/admin', label: '工作台', icon: Odometer }]
+  if (can(auth.staff, 'ticket.view')) list.push({ path: '/admin/tickets', label: '工单管理', icon: Tickets })
+  if (can(auth.staff, 'material.view')) list.push({ path: '/admin/materials', label: '物资管理', icon: Box })
+  if (can(auth.staff, 'asset.view')) list.push({ path: '/admin/assets', label: '设备台账', icon: Cpu })
+  list.push({ path: '/admin/rooms', label: '房间与二维码', icon: Grid })
+  if (canDispatch(auth.staff)) list.push({ path: '/board', label: '报障大屏', icon: Monitor })
+  if (can(auth.staff, 'report.view')) list.push({ path: '/admin/reports', label: '运维报表', icon: DataAnalysis })
+  if (can(auth.staff, 'duty.manage')) list.push({ path: '/admin/duty', label: '值班排班', icon: Calendar })
+  if (can(auth.staff, 'user.manage') || can(auth.staff, 'settings.manage')) {
     list.push({ path: '/admin/settings', label: '系统设置', icon: Setting })
   }
   return list

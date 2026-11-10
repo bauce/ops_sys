@@ -10,6 +10,7 @@ import json
 import sqlite3
 
 from .db import get_db, now
+from .permissions import resolve_permissions
 
 COOKIE_STAFF = "ops_staff"
 COOKIE_REPORTER = "ops_reporter"
@@ -104,7 +105,23 @@ def apply_duty_role(conn, data: dict) -> dict:
         and "admin" not in roles
     ):
         data["roles"] = roles + ["duty"]
+    data["permissions"], data["custom_roles"] = resolve_permissions(
+        conn, data["roles"], data.get("custom_role_ids"), on_duty
+    )
     return data
+
+
+def has_perm(staff: dict, permission: str) -> bool:
+    return permission in (staff.get("permissions") or [])
+
+
+def require_permissions(*permissions: str):
+    def dependency(staff: dict = Depends(current_staff)) -> dict:
+        if not any(has_perm(staff, p) for p in permissions):
+            raise HTTPException(status_code=403, detail="没有操作权限")
+        return staff
+
+    return dependency
 
 
 def current_staff(
@@ -114,7 +131,8 @@ def current_staff(
     if not token:
         raise HTTPException(status_code=401, detail="请先登录")
     row = conn.execute(
-        "SELECT st.id, st.username, st.name, st.role, st.roles, st.phone, st.email, s.expires_at"
+        "SELECT st.id, st.username, st.name, st.role, st.roles, st.custom_role_ids,"
+        " st.phone, st.email, s.expires_at"
         " FROM sessions s JOIN staff st ON st.id = s.staff_id"
         " WHERE s.token_hash = ? AND st.active = 1",
         (sha256(token),),

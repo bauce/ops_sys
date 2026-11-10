@@ -9,7 +9,7 @@ from .. import mailer
 from ..db import get_db, now
 from .duty import today_duty
 from ..schemas import AcceptIn, FinishIn, ManualTicketIn
-from ..security import current_staff, has_role, parse_roles, require_roles
+from ..security import current_staff, has_perm, has_role, parse_roles, require_permissions
 from ..tickets_common import (
     STATUS_TEXT,
     add_log,
@@ -31,7 +31,7 @@ def _get_ticket(conn: sqlite3.Connection, ticket_id: int):
 
 
 def _check_can_handle(ticket, staff: dict) -> None:
-    if has_role(staff, "admin") or has_role(staff, "dispatcher"):
+    if has_perm(staff, "ticket.dispatch") or has_role(staff, "admin"):
         return
     if ticket["assignee_id"] != staff["id"]:
         raise HTTPException(status_code=403, detail="该工单未指派给你，无法操作")
@@ -160,7 +160,7 @@ def create_manual(
     payload: ManualTicketIn,
     background: BackgroundTasks,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles("admin", "dispatcher", "duty")),
+    staff: dict = Depends(require_permissions("ticket.dispatch")),
 ):
     """受理员代录电话报障，可同时派单。"""
     location = (payload.location_text or "").strip()
@@ -305,9 +305,26 @@ def board_data(
         (today,),
     ).fetchone()[0]
     duty_items, _ = today_duty(conn)
+    overdue_map = {t["id"]: t.get("overdue_reason") for t in overdue}
+    all_rows = conn.execute(
+        """SELECT t.id, t.code, t.status, t.location, t.device, t.fault_type,
+                  t.contact_name, t.contact_phone, t.expect_time, t.created_at,
+                  a.name AS assignee_name
+           FROM tickets t LEFT JOIN staff a ON a.id = t.assignee_id
+           ORDER BY t.id DESC LIMIT 200"""
+    ).fetchall()
+    tickets = []
+    for r in all_rows:
+        d = dict(r)
+        d["status_text"] = STATUS_TEXT.get(d["status"], d["status"])
+        d["wait_minutes"] = minutes_since(d["created_at"])
+        d["overdue_reason"] = overdue_map.get(d["id"])
+        tickets.append(d)
+
     return {
         "pending": pending,
         "overdue": overdue,
+        "tickets": tickets,
         "stats": {
             "pending": counts.get("pending", 0),
             "processing": counts.get("accepted", 0) + counts.get("processing", 0),
@@ -342,7 +359,7 @@ def accept(
     payload: AcceptIn,
     background: BackgroundTasks,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles("admin", "dispatcher", "duty")),
+    staff: dict = Depends(require_permissions("ticket.dispatch")),
 ):
     t = _get_ticket(conn, ticket_id)
     if t["status"] != "pending":
@@ -370,7 +387,7 @@ def assign(
     payload: AcceptIn,
     background: BackgroundTasks,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles("admin", "dispatcher", "duty")),
+    staff: dict = Depends(require_permissions("ticket.dispatch")),
 ):
     if not payload.assignee_id:
         raise HTTPException(status_code=400, detail="请选择处理人")
@@ -504,7 +521,7 @@ def close(
     ticket_id: int,
     payload: dict,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles("admin", "dispatcher", "duty")),
+    staff: dict = Depends(require_permissions("ticket.dispatch")),
 ):
     t = _get_ticket(conn, ticket_id)
     if t["status"] in ("confirmed", "cancelled"):

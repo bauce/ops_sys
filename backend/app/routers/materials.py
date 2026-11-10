@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 
 from ..db import get_db, next_material_code, now
 from ..schemas import ImportIn, MaterialIn, MaterialUpdate, StockIn
-from ..security import current_staff, require_roles
+from ..security import current_staff, require_permissions
 
 router = APIRouter(prefix="/api/staff", tags=["materials"])
 
@@ -33,7 +33,7 @@ def list_categories(
 def create_category(
     payload: dict,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles(*MANAGER_ROLES)),
+    staff: dict = Depends(require_permissions("material.manage", "material.approve")),
 ):
     name = (payload.get("name") or "").strip()
     prefix = (payload.get("prefix") or "").strip().upper()
@@ -59,7 +59,7 @@ def update_category(
     category_id: int,
     payload: dict,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles(*MANAGER_ROLES)),
+    staff: dict = Depends(require_permissions("material.manage", "material.approve")),
 ):
     row = conn.execute(
         "SELECT * FROM material_categories WHERE id = ?", (category_id,)
@@ -92,7 +92,7 @@ def update_category(
 def delete_category(
     category_id: int,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles(*MANAGER_ROLES)),
+    staff: dict = Depends(require_permissions("material.manage", "material.approve")),
 ):
     used = conn.execute(
         "SELECT COUNT(*) FROM materials WHERE category_id = ?", (category_id,)
@@ -156,7 +156,7 @@ def material_options(
     staff: dict = Depends(current_staff),
 ):
     rows = conn.execute(
-        "SELECT id, code, name, spec, unit, stock FROM materials WHERE active = 1"
+        "SELECT id, code, name, spec, unit, measure_mode, stock FROM materials WHERE active = 1"
         " ORDER BY category_id, code"
     ).fetchall()
     return {"items": [dict(r) for r in rows]}
@@ -185,7 +185,7 @@ def download_template(
 def import_materials(
     payload: ImportIn,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles(*MANAGER_ROLES)),
+    staff: dict = Depends(require_permissions("material.manage", "material.approve")),
 ):
     text = (payload.content or "").lstrip("\ufeff")
     if not text.strip():
@@ -267,7 +267,7 @@ def import_materials(
 def create_material(
     payload: MaterialIn,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles(*MANAGER_ROLES)),
+    staff: dict = Depends(require_permissions("material.manage", "material.approve")),
 ):
     cat = None
     if payload.category_id:
@@ -286,13 +286,15 @@ def create_material(
         raise HTTPException(status_code=400, detail="物资编号已存在")
 
     ts = now()
+    measure_mode = payload.measure_mode if payload.measure_mode in ("quantity", "usage") else "quantity"
+    unit = "次" if measure_mode == "usage" else (payload.unit.strip() or "个")
     cur = conn.execute(
-        """INSERT INTO materials(code,name,category,category_id,spec,unit,stock,warn_stock,
+        """INSERT INTO materials(code,name,category,category_id,spec,unit,measure_mode,stock,warn_stock,
                location,unit_price,remark,active,created_at,updated_at)
-           VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?,?)""",
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)""",
         (
             code, payload.name.strip(), cat["name"], cat["id"], payload.spec.strip(),
-            payload.unit.strip() or "个", payload.stock, payload.warn_stock,
+            unit, measure_mode, payload.stock, payload.warn_stock,
             payload.location.strip(), payload.unit_price, payload.remark.strip(), ts, ts,
         ),
     )
@@ -311,7 +313,7 @@ def update_material(
     material_id: int,
     payload: MaterialUpdate,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles(*MANAGER_ROLES)),
+    staff: dict = Depends(require_permissions("material.manage", "material.approve")),
 ):
     row = conn.execute(
         "SELECT * FROM materials WHERE id = ?", (material_id,)
@@ -319,6 +321,10 @@ def update_material(
     if not row:
         raise HTTPException(status_code=404, detail="物资不存在")
     data = payload.model_dump(exclude_none=True)
+    if data.get("measure_mode") not in (None, "quantity", "usage"):
+        data.pop("measure_mode", None)
+    if data.get("measure_mode") == "usage":
+        data["unit"] = "次"
 
     if "category_id" in data or "category" in data:
         cat = None
@@ -353,7 +359,7 @@ def inbound(
     material_id: int,
     payload: StockIn,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles(*MANAGER_ROLES)),
+    staff: dict = Depends(require_permissions("material.manage", "material.approve")),
 ):
     if payload.qty <= 0:
         raise HTTPException(status_code=400, detail="入库数量必须大于 0")
@@ -383,7 +389,7 @@ def outbound(
     material_id: int,
     payload: StockIn,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles(*MANAGER_ROLES)),
+    staff: dict = Depends(require_permissions("material.manage", "material.approve")),
 ):
     if payload.qty <= 0:
         raise HTTPException(status_code=400, detail="出库数量必须大于 0")
@@ -432,7 +438,7 @@ def stock_logs(
     page = max(1, page)
     page_size = min(200, max(1, page_size))
     rows = conn.execute(
-        "SELECT l.*, m.name AS material_name, m.code AS material_code, m.unit,"
+        "SELECT l.*, m.name AS material_name, m.code AS material_code, m.unit, m.measure_mode,"
         " t.code AS ticket_code FROM stock_logs l"
         " JOIN materials m ON m.id = l.material_id"
         " LEFT JOIN tickets t ON t.id = l.ticket_id"

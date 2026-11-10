@@ -139,12 +139,14 @@
       <div class="card-title">物资领用统计</div>
       <el-table class="desktop-table" :data="data.materials" size="small">
         <el-table-column prop="name" label="物资" min-width="160" />
-        <el-table-column prop="qty" label="领用数量" width="110" align="center" />
+        <el-table-column label="领用数量 / 次数" width="130" align="center">
+          <template #default="{ row }">{{ row.qty }} {{ row.unit }}</template>
+        </el-table-column>
         <el-table-column prop="tickets" label="关联工单" width="110" align="center" />
       </el-table>
       <div class="m-card-list">
         <div v-for="r in data.materials" :key="r.name" class="m-data-card">
-          <div class="m-card-head"><span class="m-card-title" style="font-size: 14px">{{ r.name }}</span><span class="muted" style="font-size: 12px">{{ r.qty }} 件</span></div>
+          <div class="m-card-head"><span class="m-card-title" style="font-size: 14px">{{ r.name }}</span><span class="muted" style="font-size: 12px">{{ r.qty }} {{ r.unit }}</span></div>
           <div class="m-card-row"><span class="label">关联工单</span><span class="value">{{ r.tickets }} 单</span></div>
         </div>
       </div>

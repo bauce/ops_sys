@@ -38,11 +38,17 @@ export function hasRole(staff, role) {
   return roles.includes(role)
 }
 
+export function can(staff, permission) {
+  if (!staff) return false
+  if (hasRole(staff, 'admin')) return true
+  return (staff.permissions || []).includes(permission)
+}
+
 export function isDispatcher(staff) {
-  return hasRole(staff, 'admin') || hasRole(staff, 'dispatcher')
+  return can(staff, 'ticket.dispatch')
 }
 
 /** 值班中的工程师也临时拥有受理派单权限 */
 export function canDispatch(staff) {
-  return isDispatcher(staff) || (!!staff && !!staff.on_duty && hasRole(staff, 'engineer'))
+  return can(staff, 'ticket.dispatch')
 }

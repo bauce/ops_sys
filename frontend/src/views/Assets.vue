@@ -293,7 +293,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
 import { api } from '../api'
 import { auth } from '../store'
-import { hasRole } from '../utils'
+import { can } from '../utils'
 
 const items = ref([])
 const total = ref(0)
@@ -328,8 +328,8 @@ const importContent = ref('')
 const importResult = ref(null)
 const fileInput = ref(null)
 
-const isAdmin = computed(() => hasRole(auth.staff, 'admin'))
-const canManage = computed(() => hasRole(auth.staff, 'admin') || hasRole(auth.staff, 'dispatcher'))
+const isAdmin = computed(() => can(auth.staff, 'asset.password'))
+const canManage = computed(() => can(auth.staff, 'asset.manage'))
 
 onMounted(async () => {
   await Promise.all([load(), loadMeta()])

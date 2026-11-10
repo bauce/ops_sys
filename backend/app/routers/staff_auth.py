@@ -8,15 +8,25 @@ from .. import mailer
 from ..db import get_db, now
 from ..schemas import EmailConfigIn, EmailTestIn, LoginIn, StaffIn
 from ..test_mode import is_test_mode
+from ..permissions import (
+    ALL_PERMISSIONS,
+    PERMISSION_CATALOG,
+    PERMISSION_NAMES,
+    custom_roles_for,
+    parse_ids,
+    split_perms,
+)
 from ..security import (
     COOKIE_STAFF,
     apply_duty_role,
     ROLE_NAMES,
     create_session,
     current_staff,
+    has_perm,
     has_role,
     hash_password,
     parse_roles,
+    require_permissions,
     require_roles,
     sha256,
     verify_password,
@@ -54,8 +64,13 @@ def login(
         "role": data["role"],
         "roles": data["roles"],
         "on_duty": data["on_duty"],
-        "role_text": "、".join(ROLE_NAMES.get(r, r) for r in data["roles"]),
+        "role_text": "、".join(
+            [ROLE_NAMES.get(r, r) for r in data["roles"]]
+            + [c["name"] for c in data.get("custom_roles", [])]
+        ),
         "email": data["email"] or "",
+        "permissions": data["permissions"],
+        "custom_roles": data["custom_roles"],
     }
 
 
@@ -65,17 +80,20 @@ def login_options(conn: sqlite3.Connection = Depends(get_db)):
     if not is_test_mode():
         return {"test_mode": False, "accounts": []}
     rows = conn.execute(
-        "SELECT id, username, name, role, roles FROM staff WHERE active = 1"
+        "SELECT id, username, name, role, roles, custom_role_ids FROM staff WHERE active = 1"
         " ORDER BY CASE role WHEN 'admin' THEN 0 WHEN 'dispatcher' THEN 1 ELSE 2 END, id"
     ).fetchall()
     accounts = []
     for row in rows:
         roles = parse_roles(row["roles"], row["role"])
+        custom = custom_roles_for(conn, parse_ids(row["custom_role_ids"]))
         accounts.append({
             "username": row["username"],
             "name": row["name"],
             "roles": roles,
-            "role_text": "、".join(ROLE_NAMES.get(r, r) for r in roles),
+            "role_text": "、".join(
+                [ROLE_NAMES.get(r, r) for r in roles] + [c["name"] for c in custom]
+            ),
         })
     return {"test_mode": True, "accounts": accounts}
 
@@ -105,28 +123,38 @@ def me(staff: dict = Depends(current_staff)):
         "role": staff["role"],
         "roles": roles,
         "on_duty": staff.get("on_duty", False),
-        "role_text": "、".join(ROLE_NAMES.get(r, r) for r in roles),
+        "role_text": "、".join(
+            [ROLE_NAMES.get(r, r) for r in roles]
+            + [c["name"] for c in staff.get("custom_roles", [])]
+        ),
         "phone": staff["phone"],
         "email": staff["email"] or "",
+        "permissions": staff.get("permissions", []),
+        "custom_roles": staff.get("custom_roles", []),
     }
 
 
 @router.get("/users")
 def list_users(
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles(*MANAGER_ROLES, "engineer")),
+    staff: dict = Depends(require_permissions("user.manage", "ticket.dispatch", "ticket.handle", "ticket.view")),
 ):
     rows = conn.execute(
-        "SELECT id, username, name, role, roles, phone, email, active, created_at FROM staff"
+        "SELECT id, username, name, role, roles, custom_role_ids, phone, email, active, created_at FROM staff"
         " ORDER BY CASE role WHEN 'admin' THEN 0 WHEN 'dispatcher' THEN 1 ELSE 2 END, id"
     ).fetchall()
     items = []
     for r in rows:
         roles = parse_roles(r["roles"], r["role"])
+        custom = custom_roles_for(conn, parse_ids(r["custom_role_ids"]))
         items.append({
             **dict(r),
             "roles": roles,
-            "role_text": "、".join(ROLE_NAMES.get(x, x) for x in roles),
+            "role_ids": [c["id"] for c in custom],
+            "custom_roles": custom,
+            "role_text": "、".join(
+                [ROLE_NAMES.get(x, x) for x in roles] + [c["name"] for c in custom]
+            ),
         })
     return {"items": items}
 
@@ -135,26 +163,31 @@ def list_users(
 def create_user(
     payload: StaffIn,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles(*MANAGER_ROLES)),
+    staff: dict = Depends(require_permissions("user.manage")),
 ):
     roles = payload.roles or [payload.role]
     roles = [r for r in dict.fromkeys(roles) if r in ("admin", "dispatcher", "engineer")]
     if not roles:
         raise HTTPException(status_code=400, detail="请至少选择一个角色")
-    if has_role(staff, "dispatcher") and not has_role(staff, "admin"):
-        if set(roles) - {"engineer"}:
-            raise HTTPException(status_code=403, detail="受理员只能添加运维工程师账号")
+    if not has_role(staff, "admin") and set(roles) - {"engineer"}:
+        raise HTTPException(status_code=403, detail="非管理员只能添加运维工程师账号")
     if conn.execute(
         "SELECT 1 FROM staff WHERE username = ?", (payload.username.strip(),)
     ).fetchone():
         raise HTTPException(status_code=400, detail="登录名已存在")
     primary = "admin" if "admin" in roles else ("dispatcher" if "dispatcher" in roles else "engineer")
     salt = os.urandom(16).hex()
+    role_ids = []
+    if payload.role_ids:
+        if not has_role(staff, "admin"):
+            raise HTTPException(status_code=403, detail="只有管理员可以分配自定义角色")
+        role_ids = [r["id"] for r in custom_roles_for(conn, payload.role_ids)]
     conn.execute(
-        "INSERT INTO staff(username,name,role,roles,phone,email,pwd_hash,pwd_salt,active,created_at)"
-        " VALUES(?,?,?,?,?,?,?,?,1,?)",
+        "INSERT INTO staff(username,name,role,roles,custom_role_ids,phone,email,pwd_hash,pwd_salt,active,created_at)"
+        " VALUES(?,?,?,?,?,?,?,?,?,1,?)",
         (
             payload.username.strip(), payload.name.strip(), primary, ",".join(roles),
+            ",".join(str(x) for x in role_ids),
             payload.phone.strip(), (payload.email or "").strip(),
             hash_password(payload.password, salt), salt, now(),
         ),
@@ -166,10 +199,10 @@ def create_user(
 def _check_manage_permission(staff: dict, target) -> None:
     if has_role(staff, "admin"):
         return
-    if has_role(staff, "dispatcher"):
+    if has_perm(staff, "user.manage"):
         target_roles = parse_roles(target["roles"], target["role"])
         if set(target_roles) - {"engineer"}:
-            raise HTTPException(status_code=403, detail="受理员只能维护运维工程师账号")
+            raise HTTPException(status_code=403, detail="只能维护运维工程师账号")
         return
     raise HTTPException(status_code=403, detail="没有操作权限")
 
@@ -179,7 +212,7 @@ def update_user(
     user_id: int,
     payload: dict,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles(*MANAGER_ROLES)),
+    staff: dict = Depends(require_permissions("user.manage")),
 ):
     row = conn.execute("SELECT * FROM staff WHERE id = ?", (user_id,)).fetchone()
     if not row:
@@ -199,13 +232,18 @@ def update_user(
         roles = [r for r in dict.fromkeys(raw) if r in ("admin", "dispatcher", "engineer")]
         if not roles:
             raise HTTPException(status_code=400, detail="请至少选择一个角色")
-        if has_role(staff, "dispatcher") and not has_role(staff, "admin") and set(roles) - {"engineer"}:
-            raise HTTPException(status_code=403, detail="受理员不能修改账号角色")
+        if not has_role(staff, "admin") and set(roles) - {"engineer"}:
+            raise HTTPException(status_code=403, detail="非管理员不能修改账号角色")
         primary = "admin" if "admin" in roles else ("dispatcher" if "dispatcher" in roles else "engineer")
         payload = {**payload, "role": primary, "roles": ",".join(roles)}
 
     fields, values = [], []
-    for key in ("name", "role", "roles", "phone", "email", "active"):
+    if "role_ids" in payload:
+        if not has_role(staff, "admin"):
+            raise HTTPException(status_code=403, detail="只有管理员可以分配自定义角色")
+        role_ids = [r["id"] for r in custom_roles_for(conn, payload.get("role_ids") or [])]
+        payload["custom_role_ids"] = ",".join(str(x) for x in role_ids)
+    for key in ("name", "role", "roles", "custom_role_ids", "phone", "email", "active"):
         if key in payload:
             fields.append(f"{key} = ?")
             values.append(payload[key])
@@ -320,4 +358,102 @@ def test_email(
     )
     if not ok:
         raise HTTPException(status_code=400, detail=f"发送失败：{err}")
+    return {"ok": True}
+
+
+@router.get("/permissions")
+def permission_catalog(
+    staff: dict = Depends(require_permissions("user.manage")),
+):
+    groups = [
+        {"group": group, "items": [{"key": k, "name": n} for k, n in items]}
+        for group, items in PERMISSION_CATALOG
+    ]
+    return {"groups": groups}
+
+
+@router.get("/custom-roles")
+def list_custom_roles(
+    conn: sqlite3.Connection = Depends(get_db),
+    staff: dict = Depends(require_permissions("user.manage")),
+):
+    rows = conn.execute(
+        "SELECT * FROM custom_roles ORDER BY id"
+    ).fetchall()
+    items = []
+    for row in rows:
+        item = dict(row)
+        item["permissions"] = split_perms(item["permissions"])
+        item["permission_names"] = [PERMISSION_NAMES.get(p, p) for p in item["permissions"]]
+        item["user_count"] = conn.execute(
+            "SELECT COUNT(*) FROM staff WHERE active = 1 AND (',' || custom_role_ids || ',') LIKE ?",
+            (f"%,{row['id']},%",),
+        ).fetchone()[0]
+        items.append(item)
+    return {"items": items, "permissions": {
+        "groups": [
+            {"group": group, "items": [{"key": k, "name": n} for k, n in items]}
+            for group, items in PERMISSION_CATALOG
+        ]
+    }}
+
+
+@router.post("/custom-roles")
+def create_custom_role(
+    payload: dict,
+    conn: sqlite3.Connection = Depends(get_db),
+    staff: dict = Depends(require_roles("admin")),
+):
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="请填写角色名称")
+    if conn.execute("SELECT 1 FROM custom_roles WHERE name = ?", (name,)).fetchone():
+        raise HTTPException(status_code=400, detail="角色名称已存在")
+    perms = [p for p in dict.fromkeys(payload.get("permissions") or []) if p in ALL_PERMISSIONS]
+    cur = conn.execute(
+        "INSERT INTO custom_roles(name,permissions,active,created_at) VALUES(?,?,1,?)",
+        (name, ",".join(perms), now()),
+    )
+    conn.commit()
+    return {"ok": True, "id": cur.lastrowid}
+
+
+@router.put("/custom-roles/{role_id}")
+def update_custom_role(
+    role_id: int,
+    payload: dict,
+    conn: sqlite3.Connection = Depends(get_db),
+    staff: dict = Depends(require_roles("admin")),
+):
+    row = conn.execute("SELECT * FROM custom_roles WHERE id = ?", (role_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="角色不存在")
+    name = (payload.get("name") or row["name"]).strip()
+    if conn.execute(
+        "SELECT 1 FROM custom_roles WHERE name = ? AND id != ?", (name, role_id)
+    ).fetchone():
+        raise HTTPException(status_code=400, detail="角色名称已存在")
+    perms = [p for p in dict.fromkeys(payload.get("permissions") or []) if p in ALL_PERMISSIONS]
+    conn.execute(
+        "UPDATE custom_roles SET name = ?, permissions = ? WHERE id = ?",
+        (name, ",".join(perms), role_id),
+    )
+    conn.commit()
+    return {"ok": True}
+
+
+@router.delete("/custom-roles/{role_id}")
+def delete_custom_role(
+    role_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+    staff: dict = Depends(require_roles("admin")),
+):
+    used = conn.execute(
+        "SELECT COUNT(*) FROM staff WHERE active = 1 AND (',' || custom_role_ids || ',') LIKE ?",
+        (f"%,{role_id},%",),
+    ).fetchone()[0]
+    if used:
+        raise HTTPException(status_code=400, detail="该角色仍分配给账号，无法删除")
+    conn.execute("DELETE FROM custom_roles WHERE id = ?", (role_id,))
+    conn.commit()
     return {"ok": True}

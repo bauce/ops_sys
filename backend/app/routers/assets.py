@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 
 from ..crypto import decrypt, encrypt
 from ..db import get_db, now
-from ..security import current_staff, require_roles
+from ..security import current_staff, require_permissions
 
 router = APIRouter(prefix="/api/staff/assets", tags=["assets"])
 
@@ -200,7 +200,7 @@ def download_template(
 def import_assets(
     payload: dict,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles("admin", "dispatcher")),
+    staff: dict = Depends(require_permissions("asset.manage")),
 ):
     filename = (payload.get("filename") or "").lower()
     content = payload.get("content_base64") or ""
@@ -298,7 +298,7 @@ def import_assets(
 def create_asset(
     payload: dict,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles("admin", "dispatcher")),
+    staff: dict = Depends(require_permissions("asset.manage")),
 ):
     if not (payload.get("name") or "").strip():
         raise HTTPException(status_code=400, detail="设备名称不能为空")
@@ -326,7 +326,7 @@ def update_asset(
     asset_id: int,
     payload: dict,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles("admin", "dispatcher")),
+    staff: dict = Depends(require_permissions("asset.manage")),
 ):
     row = conn.execute("SELECT * FROM assets WHERE id = ?", (asset_id,)).fetchone()
     if not row:
@@ -351,7 +351,7 @@ def update_asset(
 def delete_asset(
     asset_id: int,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles("admin", "dispatcher")),
+    staff: dict = Depends(require_permissions("asset.manage")),
 ):
     conn.execute("UPDATE assets SET active = 0 WHERE id = ?", (asset_id,))
     conn.commit()
@@ -362,7 +362,7 @@ def delete_asset(
 def reveal_password(
     asset_id: int,
     conn: sqlite3.Connection = Depends(get_db),
-    admin: dict = Depends(require_roles("admin")),
+    admin: dict = Depends(require_permissions("asset.password")),
 ):
     row = conn.execute(
         "SELECT mgmt_password FROM assets WHERE id = ? AND active = 1", (asset_id,)

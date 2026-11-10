@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..db import get_db, now
-from ..security import ROLE_NAMES, current_staff, parse_roles, require_roles
+from ..security import ROLE_NAMES, current_staff, parse_roles, require_permissions
 
 router = APIRouter(prefix="/api/staff/duty", tags=["duty"])
 
@@ -132,7 +132,7 @@ def get_week(
 def save_week(
     payload: dict,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles("admin", "dispatcher")),
+    staff: dict = Depends(require_permissions("duty.manage")),
 ):
     start, _ = week_range(payload.get("week_start") or date.today().isoformat())
     ids = parse_ids(json.dumps(payload.get("staff_ids") or []))
@@ -157,7 +157,7 @@ def save_week(
 def add_adjustment(
     payload: dict,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles("admin", "dispatcher")),
+    staff: dict = Depends(require_permissions("duty.manage")),
 ):
     adjust_date = (payload.get("adjust_date") or "").strip()
     try:
@@ -201,7 +201,7 @@ def add_adjustment(
 def delete_adjustment(
     adjust_id: int,
     conn: sqlite3.Connection = Depends(get_db),
-    staff: dict = Depends(require_roles("admin", "dispatcher")),
+    staff: dict = Depends(require_permissions("duty.manage")),
 ):
     conn.execute("DELETE FROM duty_adjustments WHERE id = ?", (adjust_id,))
     conn.commit()

@@ -269,6 +269,14 @@ CREATE TABLE IF NOT EXISTS duty_adjustments (
 CREATE INDEX IF NOT EXISTS idx_adjust_week ON duty_adjustments(week_start);
 CREATE INDEX IF NOT EXISTS idx_adjust_date ON duty_adjustments(adjust_date);
 
+CREATE TABLE IF NOT EXISTS custom_roles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    permissions TEXT DEFAULT '',
+    active INTEGER DEFAULT 1,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -335,6 +343,27 @@ def _seed_categories(conn: sqlite3.Connection) -> None:
         )
 
 
+def _ensure_usage_material(conn: sqlite3.Connection) -> None:
+    """确保「散热硅脂」这类按次数计量的物资存在。"""
+    if conn.execute("SELECT 1 FROM materials WHERE name = '散热硅脂'").fetchone():
+        return
+    cat = conn.execute(
+        "SELECT * FROM material_categories WHERE name = '其它' ORDER BY id LIMIT 1"
+    ).fetchone()
+    if not cat:
+        return
+    code = next_material_code(conn, cat["prefix"])
+    ts = now()
+    conn.execute(
+        """INSERT INTO materials(code,name,category,category_id,spec,unit,measure_mode,
+               stock,warn_stock,location,unit_price,remark,active,created_at,updated_at)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)""",
+        (code, "散热硅脂", cat["name"], cat["id"], "导热硅脂 1g/次", "次", "usage",
+         20, 5, "机房A柜", 0, "按使用次数计量，不按支/盒", ts, ts),
+    )
+    conn.commit()
+
+
 def migrate(conn: sqlite3.Connection) -> None:
     """兼容旧数据库：补充字段、字典与分类，并迁移物资编号。"""
     _ensure_column(conn, "tickets", "expect_time", "TEXT DEFAULT ''")
@@ -342,9 +371,22 @@ def migrate(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "materials", "category_id", "INTEGER")
     _ensure_column(conn, "staff", "email", "TEXT DEFAULT ''")
     _ensure_column(conn, "staff", "roles", "TEXT DEFAULT ''")
+    _ensure_column(conn, "staff", "custom_role_ids", "TEXT DEFAULT ''")
     _ensure_column(conn, "tickets", "source", "TEXT DEFAULT 'qr'")
     _ensure_column(conn, "tickets", "photos", "TEXT DEFAULT '[]'")
     _ensure_column(conn, "rooms", "importance", "TEXT DEFAULT '普通'")
+    _ensure_column(conn, "materials", "measure_mode", "TEXT DEFAULT 'quantity'")
+    _ensure_usage_material(conn)
+    if conn.execute("SELECT COUNT(*) FROM custom_roles").fetchone()[0] == 0:
+        conn.execute(
+            "INSERT INTO custom_roles(name,permissions,active,created_at) VALUES(?,?,1,?)",
+            (
+                "运维组长",
+                "ticket.view,ticket.dispatch,material.view,material.manage,material.approve,"
+                "asset.view,asset.manage,asset.password,room.manage,duty.manage,report.view",
+                now(),
+            ),
+        )
     conn.execute("UPDATE staff SET roles = role WHERE roles IS NULL OR roles = ''")
     for key, value in (("sla_pending_minutes", "15"), ("sla_accept_minutes", "60"),
                        ("sla_processing_hours", "4")):
