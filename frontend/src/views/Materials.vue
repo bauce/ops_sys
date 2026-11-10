@@ -139,12 +139,12 @@
         <el-row :gutter="12">
           <el-col :span="8">
             <el-form-item :label="form.id ? '当前库存' : '初始库存'">
-              <el-input-number v-model="form.stock" :min="0" :precision="1" style="width: 100%" :disabled="!!form.id" />
+              <el-input-number v-model="form.stock" :min="0" :step="1" style="width: 100%" :disabled="!!form.id" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="库存预警值">
-              <el-input-number v-model="form.warn_stock" :min="0" :precision="1" style="width: 100%" />
+              <el-input-number v-model="form.warn_stock" :min="0" :step="1" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -179,9 +179,9 @@
         >
           <el-input-number
             v-model="stockForm.qty"
-            :min="current?.measure_mode === 'usage' ? 1 : 0.1"
-            :precision="current?.measure_mode === 'usage' ? 0 : 1"
-            :step="current?.measure_mode === 'usage' ? 1 : 0.1"
+            :min="current?.measure_mode === 'usage' ? 1 : 0.01"
+            :precision="current?.measure_mode === 'usage' ? 0 : undefined"
+            :step="1"
             style="width: 100%"
           />
         </el-form-item>

@@ -309,7 +309,14 @@
                   :value="opt.id"
                 />
               </el-select>
-              <el-input-number v-model="m.qty" :min="0.1" :step="1" :precision="1" controls-position="right" style="width: 130px" />
+              <el-input-number
+                v-model="m.qty"
+                :min="materialIsUsage(m.material_id) ? 1 : 0.01"
+                :precision="materialIsUsage(m.material_id) ? 0 : undefined"
+                :step="1"
+                controls-position="right"
+                style="width: 130px"
+              />
               <el-button :icon="Delete" circle @click="finishForm.materials.splice(i, 1)" />
             </div>
             <el-button :icon="Plus" size="small" @click="addMaterial">添加物资</el-button>
@@ -361,6 +368,9 @@ const drawerVisible = ref(false)
 const detail = ref(null)
 const engineers = ref([])
 const materialOptions = ref([])
+function materialIsUsage(id) {
+  return materialOptions.value.find((x) => x.id === id)?.measure_mode === 'usage'
+}
 
 const assignVisible = ref(false)
 const assignMode = ref('assign')
